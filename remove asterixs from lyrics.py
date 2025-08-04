@@ -93,6 +93,7 @@ def replacements(string):
         "n***a": "nigga",
         "n***er": "nigger",
         "p***y": "pussy",
+        "p*ssy": "pussy"
     }
     for pattern, replacement in fixes.items():
         string = string.replace(pattern, replacement)
