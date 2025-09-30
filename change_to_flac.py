@@ -99,7 +99,7 @@ def convert_to_flac(input_file, output_folder=None, quality=8, overwrite=False, 
         print(f"✗ Failed to convert {input_path.name}: {e.stderr}")
         return False
 
-def get_user_input():
+def get_user_input(location = ""):
     """Get user input for conversion settings."""
     print("=" * 60)
     print("           MUSIC TO FLAC CONVERTER")
@@ -107,7 +107,10 @@ def get_user_input():
     
     # Get folder path
     while True:
-        folder = "C:\\Users\\Adam\\Music\\New unformated songs" # input("\nEnter the folder path containing music files: ").strip()
+        if location:
+            folder = location
+            break
+        folder = input("\nEnter the folder path containing music files: ").strip() # "C:\\Users\\Adam\\Music\\New unformated songs"
         if folder:
             if folder.startswith('"') and folder.endswith('"'):
                 folder = folder[1:-1]  # Remove quotes if present
@@ -188,7 +191,14 @@ def get_user_input():
     
     return folder, output_folder, quality, overwrite, remove_original, dry_run
 
-def main():
+def convert(location = ""):
+    # check that there are non-flac files in the folder
+    audio_files = get_audio_files(location)
+    if not audio_files:
+        print("No non-FLAC files found in the folder.")
+        return
+
+
     print("Welcome to the Interactive Music to FLAC Converter!")
     
     # Check if ffmpeg is available
@@ -199,7 +209,7 @@ def main():
     
     try:
         # Get user input
-        folder, output_folder, quality, overwrite, remove_original, dry_run = get_user_input()
+        folder, output_folder, quality, overwrite, remove_original, dry_run = get_user_input(location)
         
         print(f"\n{'='*60}")
         print("CONVERSION SETTINGS:")
@@ -266,7 +276,7 @@ def main():
         if remove_original:
             print(f"🗑️  Original files removed: {removed}")
         
-        input("\nPress Enter to exit...")
+        input("\nPress Enter to exit file converter...")
         return 0 if failed == 0 else 1
         
     except (FileNotFoundError, NotADirectoryError) as e:
@@ -283,4 +293,4 @@ def main():
         return 1
 
 if __name__ == "__main__":
-    exit(main())
+    exit(convert())

@@ -1,7 +1,7 @@
 # get list of files from directory
 import os
 
-unfiltered_files = os.listdir("C:/Users/adam/music/my playlist")
+unfiltered_files = os.listdir("D:/Music/My Playlist")
 files = []
 spotify = []
 file_artists = []
@@ -116,7 +116,7 @@ def main():
 
 
     print("-" * 80)
-    print(f"{'Not in Files':<60} | {'Not in Spotify':<40}")
+    print(f"{"Not in Spotify".center(80)} | {"Not in Files".center(80)}")
     print("-" * 80)
 
     # find all songs not in both
@@ -130,15 +130,39 @@ def main():
     # Calculate max length to zip safely
     max_len = max(len(not_in_spotify), len(not_in_files))
 
+    # sort both by artists
+    not_in_spotify.sort(key=lambda x: x.split(" - ")[1] if " - " in x else "")
+    not_in_files.sort(key=lambda x: x.split(" - ")[1] if " - " in x else "")
+
     # Pad shorter list with empty strings
     not_in_spotify += [""] * (max_len - len(not_in_spotify))
     not_in_files += [""] * (max_len - len(not_in_files))
 
+    # Remove file extensions
+    not_in_spotify = [not_in_spotify[i].split(".")[0] for i in range(max_len)]
+
     # Print side-by-side
     for s1, s2 in zip(not_in_spotify, not_in_files):
-        print(f"{s2:<60} | {s1:<40}")
+        title1, artist1, album1, title2, artist2, album2 = "", "", "", "", "", ""
+        parts = s1.split(" - ")
+        if len(parts) >= 3:
+            title1, artist1, album1 = parts[0], parts[1], parts[2]
+        parts = s2.split(" - ")
+        if len(parts) >= 3:
+            title2, artist2, album2 = parts[0], parts[1], parts[2]
+        # cut strings to 30 chars
+        title1 = title1[:30]
+        artist1 = artist1[:30]
+        album1 = album1[:30]
+        title2 = title2[:30]
+        artist2 = artist2[:30]
+        album2 = album2[:30]
+        print(f"{title1:<30} | {artist1:<30} | {album1:<30} | {title2:<30} | {artist2:<30} | {album2:<30}")
 
     print("-" * 80)
+
+    print(f"Song not in Spotify: {len(not_in_spotify)}")
+    print(f"Song not in Files: {len(not_in_files)}")
 
 
 if __name__ == "__main__":

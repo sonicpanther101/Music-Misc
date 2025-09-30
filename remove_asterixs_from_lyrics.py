@@ -81,6 +81,7 @@ def replacements(string):
         "***": "sex",
         "h*e": "hoe",
         "c**k": "cock",
+        "c*ck": "cock",
         "coc*ine": "cocaine",
         "c*****e": "cocaine",
         "m*******a": "marijuana",
@@ -235,8 +236,12 @@ def process_manual_replacement(song):
             except Exception as e:
                 print(f"{Fore.RED}Error: {str(e)}")
 
-def main():
-    target_dir = input("Enter the path to the target directory: ")
+def remove_asterixs_from_lyrics(directory=None):
+    if directory is None:
+        target_dir = input("Enter the path to the target directory: ")
+    else:
+        target_dir = directory
+        
     if not os.path.isdir(target_dir):
         print(f"{Fore.RED}Error: {target_dir} is not a valid directory")
         sys.exit(1)
@@ -277,4 +282,4 @@ def main():
     print(f"\n{Fore.GREEN}Processing complete!")
 
 if __name__ == "__main__":
-    main()
+    remove_asterixs_from_lyrics()
