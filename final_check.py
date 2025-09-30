@@ -49,6 +49,12 @@ def confirm_and_move(directory, new_directory):
             print(f"Invalid filename format for {os.path.basename(flac)}. Skipping.")
             continue
 
+        # Check that there is an album image
+        if not audio_file.pictures:
+            print(f"No album image for {os.path.basename(flac)}. Skipping.")
+            input("Press Enter to continue...")
+            continue
+
         # Check if the file already exists in the new directory
         new_path = os.path.join(new_directory, filename)
         if os.path.exists(new_path):

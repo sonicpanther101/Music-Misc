@@ -5,8 +5,6 @@ import re
 from deep_translator import GoogleTranslator  # Add Google Translate import
 import time  # For rate limiting
 
-files = os.listdir("C:/Users/adam/music/my playlist")
-
 def get_unsynced_lyrics(file_path: str) -> str:
     try:
         audio = FLAC(file_path)
@@ -55,34 +53,42 @@ def translate_line(text, translator):
         print(f"Translation error for '{text}': {e}")
         return None
 
-def main():
-    name = input("Enter the name of the album: ")
-    translator = GoogleTranslator(source='auto', target='en')
-    exists = False
-    for file in files:
-        print(file)
-        if name in file:
-            exists = True
-            break
-    if not exists:
-        print("Album not found!")
-        return
+def needs_translation(lyrics: str) -> bool:
+    """Check if lyrics contain non-English text that needs translation"""
+    if not lyrics:
+        return False
     
-    print("Album found!")
+    # Count English vs non-English characters
+    english_chars = re.findall(r'[a-zA-Z\s]', lyrics)
+    non_english_chars = re.findall(r'[^\x00-\x7F\s]', lyrics)  # Non-ASCII
+    
+    # If there are significant non-English characters, needs translation
+    if len(non_english_chars) > len(english_chars) * 0.3:  # 30% threshold
+        return True
+    
+    return False
 
-    file_paths = [file for file in files if name in file]
-    if not file_paths:
-        print("No matching files found!")
-        return
-    
-    print("Matching files found!")
+def translate_lyrics(directory):
+    translator = GoogleTranslator(source='auto', target='en')
+
+    files = os.listdir(directory)
+
+    file_paths = []
+    for file in files:
+        if file.endswith(".flac"):
+            file_paths.append(file)
 
     for i, file in enumerate(file_paths, 1):
         print(f"{i}. {file}")
 
-        file_path = os.path.join("C:/Users/adam/music/my playlist", file)
+        file_path = os.path.join(directory, file)
         lyrics = get_unsynced_lyrics(file_path)
         lyrics = sort_by_time(lyrics)
+
+        if not needs_translation(lyrics):
+            print("No translation needed.")
+            continue
+
         print("Lyrics:\n", lyrics)
 
         if input("Translate? y/n: ").lower() != "y":
@@ -161,4 +167,4 @@ def main():
                 print(f"Error applying lyrics: {e}")
 
 if __name__ == "__main__":
-    main()
+    translate_lyrics("D:/Music/New unformated songs")
