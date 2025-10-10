@@ -1,6 +1,7 @@
 import os
 from mutagen.flac import FLAC
 import re
+import unicodedata
 
 def get_flacs(directory):
     """Get all FLAC files in a directory and their tags."""
@@ -10,76 +11,113 @@ def get_flacs(directory):
             if file.endswith(".flac"):
                 full_path = os.path.join(root, file)
                 flac_files.append(full_path)
-    
     return flac_files
+
+def normalize(s):
+    return unicodedata.normalize("NFKC", s).strip().lower()
+
+def sanitize_filename(filename):
+    """Remove or replace characters that are invalid in Windows filenames."""
+    replacements = {
+        ':': ' -', '/': '-', '\\': '-', '|': '-', '?': '',
+        '*': '', '"': "'", '<': '', '>': ''
+    }
+    for old, new in replacements.items():
+        filename = filename.replace(old, new)
+    return filename.rstrip('. ')
+
+def ask_skip(message):
+    """Ask user if they want to skip this check."""
+    response = input(f"{message}\nSkip this check for this file? (y/n): ").strip().lower()
+    return response == "y"
 
 def confirm_and_move(directory, new_directory):
     flacs = get_flacs(directory)
-    required_tags = ["artist", "title", "album", "date", "UNSYNCED LYRICS", "albumartist", "replaygain_album_gain", 'replaygain_album_peak', 'replaygain_track_gain', "replaygain_track_peak"]
+    required_tags = [
+        "artist", "title", "album", "date", "UNSYNCED LYRICS",
+        "albumartist", "replaygain_album_gain", "replaygain_album_peak",
+        "replaygain_track_gain", "replaygain_track_peak"
+    ]
 
     for flac in flacs:
         audio_file = FLAC(flac)
         print(f"\nChecking: {flac}")
 
-        # Check if all required tags are present
+        # --- Check for missing tags ---
+        missing_tag = False
         for tag in required_tags:
             if tag not in audio_file or not audio_file[tag]:
-                print(f"Missing '{tag}' for {os.path.basename(flac)}. Skipping.")
+                print(f"Missing '{tag}' for {os.path.basename(flac)}.")
+                if ask_skip("This tag is missing."):
+                    continue
+                missing_tag = True
+                break
+        if missing_tag:
+            continue
+
+        # --- Date format check ---
+        if len(audio_file["date"][0]) != 4:
+            msg = f"Invalid date format for {os.path.basename(flac)} ({audio_file['date'][0]} not in YYYY format)."
+            if not ask_skip(msg):
+                print("Skipping file.")
                 continue
 
-        # Check if the date is in the correct format
-        if len(audio_file["date"][0]) != 4:
-            print(f"Invalid date format for {os.path.basename(flac)}. Skipping.")
-            continue
-
-        # Check if the artist is in the correct format
+        # --- Artist format check ---
         artist = audio_file["artist"][0]
+        formatted_artist = re.sub(r"\s*(?:,|&|\b(?:feat\.?|ft\.?|featuring)\b)\s*", "; ", artist, flags=re.IGNORECASE)
+        formatted_artist = re.sub(r"(; )+", "; ", formatted_artist).strip("; ").strip()
+        if normalize(formatted_artist) != normalize(artist):
+            msg = f"Invalid artist format for {os.path.basename(flac)}: {artist}"
+            if not ask_skip(msg):
+                print("Skipping file.")
+                continue
 
-        artist = re.sub(r"\s*(,|&|feat\.?|ft\.?|featuring)\s*", "; ", artist, flags=re.IGNORECASE)
-
-        artist = re.sub(r"(; )+", "; ", artist).strip("; ").strip()
-
-        if artist != audio_file["artist"][0]:
-            print(f"Invalid artist format for {os.path.basename(flac)}. Skipping.")
-            continue
-
-        # Check if the filename is in the correct format
+        # --- Filename format check ---
         filename = os.path.basename(flac)
-        if filename != f"{audio_file['title'][0]} - {audio_file['artist'][0]}{' - ' + audio_file['album'][0] if audio_file['album'] != audio_file['title'] else ''}.flac":
-            print(f"Invalid filename format for {os.path.basename(flac)}. Skipping.")
-            continue
+        expected_filename = f"{audio_file['title'][0]} - {audio_file['artist'][0]}{' - ' + audio_file['album'][0] if audio_file['album'] != audio_file['title'] else ''}.flac"
+        expected_filename = sanitize_filename(expected_filename)
 
-        # Check that there is an album image
+        if normalize(filename) != normalize(expected_filename):
+            print(f"Invalid filename format for {os.path.basename(flac)}.")
+            for i, (a, b) in enumerate(zip(filename, expected_filename)):
+                if a != b:
+                    print(f"Difference at position {i}: '{a}' vs '{b}'")
+            if not ask_skip("Filename format differs."):
+                print("Skipping file.")
+                continue
+
+        # --- Album image check ---
         if not audio_file.pictures:
-            print(f"No album image for {os.path.basename(flac)}. Skipping.")
-            input("Press Enter to continue...")
-            continue
+            msg = f"No album image for {os.path.basename(flac)}."
+            if not ask_skip(msg):
+                print("Skipping file.")
+                continue
 
-        # Check if the file already exists in the new directory
+        # --- Duplicate in destination ---
         new_path = os.path.join(new_directory, filename)
         if os.path.exists(new_path):
-            print(f"File {filename} already exists in the new directory. Skipping.")
-            continue
+            msg = f"File {filename} already exists in the new directory."
+            if not ask_skip(msg):
+                print("Skipping file.")
+                continue
 
-        print(f"File {filename} is ready to be moved to the new directory.")
-        
-        # Print tags and ask for confirmation
+        # --- Final confirmation ---
+        print(f"\n✅ File {filename} is ready to be moved to the new directory.")
         for tag in required_tags:
             print(f"{tag}: {audio_file[tag][0]}")
-
         print(f"Filename: {filename}")
 
-        confirm = input("Do you want to move this file to the new directory? (y/n): ")
-        if confirm.lower() != "y":
+        confirm = input("Move this file? (y/n): ").strip().lower()
+        if confirm != "y":
             print("Skipping file.")
             continue
 
-        # Move the file to the root directory
-        new_path = os.path.join(new_directory, filename)
+        # --- Move file ---
         try:
             os.rename(flac, new_path)
-        except:
-            print(f"Failed to move {flac} to {new_path}, likely because it already exists. Skipping.")
+            print(f"Moved {filename} successfully.")
+        except Exception as e:
+            print(f"⚠️ Failed to move {flac} → {new_path}: {e}")
 
 if __name__ == "__main__":
     confirm_and_move("D:/Music/New unformated songs", "D:/Music/My Playlist")

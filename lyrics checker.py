@@ -26,7 +26,9 @@ intsrumentals = [
     "Fuck Face",
     "Patience",
     "Pretty Little Ditty",
-    "Stop Smoking"
+    "Stop Smoking",
+    "Druun",
+    "Asteroid Blues"
 ]
 
 intsrumentalArtists = [

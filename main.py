@@ -3,14 +3,19 @@ from change_to_flac import convert
 from remove_asterixs_from_lyrics import remove_asterixs_from_lyrics
 from fix_tags import fix_tags
 from final_check import confirm_and_move
+from translate_lyrics import translate_lyrics
 
 def main():
     initial_location = "C:/Users/Adam/Documents/Soulseek Downloads/complete"
     location = "D:/Music/New unformated songs"
     playlist = "D:/Music/My Playlist"
 
+
+    print("Moving files to root")
     move_files_to_root(initial_location, location)
+    print("Converting to FLAC")
     convert(location)
+    print("Fixing tags")
     fix_tags(location)
 
     print("Get lyrics and set replaygain from Foobar2000")

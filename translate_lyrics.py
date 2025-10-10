@@ -4,6 +4,11 @@ import os
 import re
 from deep_translator import GoogleTranslator  # Add Google Translate import
 import time  # For rate limiting
+from langdetect import detect, LangDetectException
+from langdetect.detector_factory import DetectorFactory
+
+# Set seed once at module level for deterministic results
+DetectorFactory.seed = 0
 
 def get_unsynced_lyrics(file_path: str) -> str:
     try:
@@ -58,15 +63,20 @@ def needs_translation(lyrics: str) -> bool:
     if not lyrics:
         return False
     
-    # Count English vs non-English characters
-    english_chars = re.findall(r'[a-zA-Z\s]', lyrics)
-    non_english_chars = re.findall(r'[^\x00-\x7F\s]', lyrics)  # Non-ASCII
+    try:
+        text_to_check = re.sub(r'[^\w\s]', '', lyrics).strip()
+        
+        if not text_to_check or len(text_to_check) < 3:
+            return False
+        
+        detected_lang = detect(text_to_check)
+        return detected_lang != 'en'
     
-    # If there are significant non-English characters, needs translation
-    if len(non_english_chars) > len(english_chars) * 0.3:  # 30% threshold
-        return True
-    
-    return False
+    except LangDetectException:
+        # Fallback for very short or ambiguous text
+        non_ascii = len(re.findall(r'[^\x00-\x7F]', lyrics))
+        ascii_letters = len(re.findall(r'[a-zA-Z]', lyrics))
+        return non_ascii > ascii_letters * 0.1
 
 def translate_lyrics(directory):
     translator = GoogleTranslator(source='auto', target='en')
@@ -160,7 +170,6 @@ def translate_lyrics(directory):
             try:
                 audio = FLAC(file_path)
                 audio["UNSYNCED LYRICS"] = fixed_lyrics
-                audio["LYRICS"] = fixed_lyrics
                 audio.save()
                 print("New lyrics applied successfully.")
             except mutagen.MutagenError as e:

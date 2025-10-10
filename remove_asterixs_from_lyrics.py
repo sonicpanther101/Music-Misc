@@ -156,7 +156,6 @@ def process_auto_replacement(song):
         
         # Join the modified lyrics back into a single string
         song['audio']['unsynced lyrics'] = '\n'.join(new_lyrics)
-        song['audio']['lyrics'] = '\n'.join(new_lyrics)
         
         try:
             song['audio'].save()

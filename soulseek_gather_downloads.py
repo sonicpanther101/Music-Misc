@@ -1,5 +1,6 @@
 # search all nested files in directory and move them to the root directory
 import os
+import shutil
 
 def search_files_recursive(directory):
     for root, dirs, files in os.walk(directory):
@@ -31,9 +32,9 @@ def move_files_to_root(directory, new_directory):
         new_path = os.path.join(new_directory, file_name)
         print(new_path)
         try:
-            os.rename(file, new_path)
+            shutil.move(file, new_path)
         except:
-            os.rename(file, new_path.replace('.flac', ' (1).flac'))
+            shutil.move(file, new_path.replace('.flac', ' (1).flac'))
 
     cleanup(directory)
 
