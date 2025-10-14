@@ -2,6 +2,7 @@ from soulseek_gather_downloads import move_files_to_root
 from change_to_flac import convert
 from remove_asterixs_from_lyrics import remove_asterixs_from_lyrics
 from fix_tags import fix_tags
+from artist_image import get_artist_image
 from final_check import confirm_and_move
 from translate_lyrics import translate_lyrics
 
@@ -17,6 +18,8 @@ def main():
     convert(location)
     print("Fixing tags")
     fix_tags(location)
+    print("Getting artist images")
+    get_artist_image(playlist)
 
     print("Get lyrics and set replaygain from Foobar2000")
     input("Press Enter to continue...")
