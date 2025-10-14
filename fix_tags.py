@@ -96,6 +96,12 @@ def fix_tags(directory):
                 audio_file["album"] = [new_album]
                 updated = True
 
+        if " - Single" in audio_file["album"][0]:
+            new_album = audio_file["album"][0].replace(" - Single", "")
+            if confirm(f"Change album '{audio_file['album'][0]}' → '{new_album}'?"):
+                audio_file["album"] = [new_album]
+                updated = True
+
         if updated:
             audio_file.save()
             print(f"✅ Tags updated for: {flac}")
