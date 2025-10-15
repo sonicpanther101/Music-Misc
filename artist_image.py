@@ -231,11 +231,20 @@ def embed_artist_image(flac_paths, image_bytes, image_url, check_needed=True):
 
         try:
             audio = FLAC(path)
-            pic = Picture()
-            pic.type = 8  # artist/performer
-            pic.mime = "image/jpeg"
-            pic.data = image_bytes
-            audio.add_picture(pic)
+            # Keep existing pictures (covers, back, etc.)
+            existing_pics = list(audio.pictures)
+
+            # Create artist picture block
+            artist_pic = Picture()
+            artist_pic.type = 8  # artist/performer
+            artist_pic.mime = "image/jpeg"
+            artist_pic.data = image_bytes
+
+            # Append without clearing
+            existing_pics.append(artist_pic)
+            audio.clear_pictures()
+            for p in existing_pics:
+                audio.add_picture(p)
             if ADD_IMAGE_URL_TAG and image_url:
                 audio["ARTISTIMAGEURL"] = [image_url]
             audio.save()
