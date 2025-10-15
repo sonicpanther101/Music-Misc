@@ -6,6 +6,7 @@ from artist_image import get_artist_image
 from translate_lyrics import translate_lyrics
 from final_check import confirm_and_move
 from tag_normaliser import normalise
+from artist_image import get_artist_image
 
 def main():
     initial_location = "C:/Users/Adam/Documents/Soulseek Downloads/complete"
@@ -35,6 +36,12 @@ def main():
     confirm_and_move(location, playlist)
 
     normalise(playlist)
+
+    get_artist_image(playlist)
+
+    
+
+    print("All done!")
 
 if __name__ == "__main__":
     main()

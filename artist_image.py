@@ -126,10 +126,10 @@ def download_and_cache_image(url, artist_name, index):
 
 
 def scrape_lastfm_artist_images(artist_name):
-    """Scrape artist images from Last.fm page."""
+    """Scrape artist images from Last.fm +images page."""
     # Format artist name for URL
     artist_url = artist_name.replace(" ", "+")
-    url = f"https://www.last.fm/music/{artist_url}"
+    url = f"https://www.last.fm/music/{artist_url}/+images"
     
     print(f"Fetching: {url}")
     
@@ -139,45 +139,48 @@ def scrape_lastfm_artist_images(artist_name):
         
         soup = BeautifulSoup(r.content, 'html.parser')
         
-        # Find artist images - Last.fm uses various selectors
         images = []
         
-        # Look for the header background image (main artist image)
-        header_bg = soup.find('div', class_='header-new-background-image')
-        if header_bg and header_bg.get('style'):
-            style = header_bg['style']
-            # Extract URL from style="background-image: url(...)"
-            match = re.search(r'url\(["\']?(.*?)["\']?\)', style)
-            if match:
-                img_url = match.group(1)
-                # Convert to highest quality
-                # img_url = img_url.replace('/ar0/', '/300x300/')
-                images.append(img_url)
-                print(f"Found header image: {img_url}")
+        # Exclude similar artists sections
+        for similar_section in soup.find_all(['section', 'div'], class_=re.compile(r'similar-')):
+            similar_section.decompose()
         
-        # # Look for avatar images as backup
-        # avatar_imgs = soup.find_all('img', class_=re.compile(r'avatar'))
-        # for img in avatar_imgs:
-        #     src = img.get('src')
-        #     if src and ('lastfm' in src or 'akamaized' in src):
-        #         # Try to get larger version
-        #         src_large = src.replace('/avatar170s/', '/300x300/')
-        #         src_large = src_large.replace('/ar0/', '/300x300/')
-        #         if src_large not in images:
-        #             images.append(src_large)
+        # Find all image containers in the gallery
+        # Last.fm uses img tags within the image gallery
+        img_tags = soup.find_all('img')
         
-        # # Look for any other images with lastfm CDN
-        # all_imgs = soup.find_all('img')
-        # for img in all_imgs:
-        #     src = img.get('src', '')
-        #     if ('lastfm' in src or 'akamaized' in src) and src not in images:
-        #         # Try to get larger version
-        #         src_large = src.replace('/ar0/', '/300x300/')
-        #         src_large = src_large.replace('/avatar170s/', '/300x300/')
-        #         if src_large not in images:
-        #             images.append(src_large)
+        for img in img_tags:
+            # Skip if image is within similar artists sections
+            parent_classes = ' '.join(img.parent.get('class', []) if img.parent else [])
+            if 'similar-' in parent_classes:
+                continue
+            
+            # Get the src attribute
+            src = img.get('src', '')
+            
+            # Filter for actual artist images (not icons, avatars, etc.)
+            # Last.fm artist images typically have specific patterns
+            if 'lastfm.freetls.fastly.net' in src or 'last.fm' in src:
+                # Try to get higher resolution version
+                # Replace size parameters to get larger images
+                high_res = src.replace('/avatar170s/', '/300x300/')
+                high_res = high_res.replace('/50s/', '/300x300/')
+                high_res = high_res.replace('/64s/', '/300x300/')
+                high_res = high_res.replace('/avatar/', '/300x300/')
+                
+                if high_res not in images and 'default_' not in high_res:
+                    images.append(high_res)
+                    print(f"Found image: {high_res[:80]}...")
         
-        return images
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_images = []
+        for img in images:
+            if img not in seen:
+                seen.add(img)
+                unique_images.append(img)
+        
+        return unique_images
         
     except Exception as e:
         print(f"Error scraping Last.fm: {e}")
@@ -185,7 +188,7 @@ def scrape_lastfm_artist_images(artist_name):
 
 
 def choose_artist_image(artist_name, current, total):
-    """Scrape Last.fm artist images and prompt user interactively."""
+    """Scrape Last.fm artist images and allow cycling through them."""
     print(f"\n[{current}/{total}] --- Artist: {artist_name} ---")
     
     images = scrape_lastfm_artist_images(artist_name)
@@ -196,22 +199,39 @@ def choose_artist_image(artist_name, current, total):
     
     print(f"Found {len(images)} images")
     
-    # Show all images
-    for idx, url in enumerate(images, 1):
-        print(f"\n→ Showing image {idx}/{len(images)} for {artist_name}")
+    # Cycle through images
+    idx = 0
+    while idx < len(images):
+        url = images[idx]
+        print(f"\n→ Showing image {idx + 1}/{len(images)} for {artist_name}")
         print(f"   URL: {url[:80]}...")
         
-        cached = download_and_cache_image(url, artist_name, idx)
+        cached = download_and_cache_image(url, artist_name, idx + 1)
         
         if cached:
-            show_image(cached, artist_name, idx, len(images))
-            choice = input("Use this image? [y]es / [n]ext / [s]kip artist: ").strip().lower()
+            show_image(cached, artist_name, idx + 1, len(images))
+            choice = input("Use this image? [y]es / [n]ext / [p]revious / [s]kip artist: ").strip().lower()
+            
             if choice == "y":
                 return cached, url
+            elif choice == "n":
+                idx += 1
+                if idx >= len(images):
+                    print("No more images available.")
+                    return None, None
+            elif choice == "p":
+                idx = max(0, idx - 1)
             elif choice == "s":
                 return None, None
+            else:
+                # Default to next
+                idx += 1
+                if idx >= len(images):
+                    print("No more images available.")
+                    return None, None
         else:
-            print("Could not preview this image.")
+            print("Could not preview this image, trying next...")
+            idx += 1
     
     print("No more images available.")
     return None, None
@@ -294,4 +314,4 @@ def get_artist_image(Folder):
 
 
 if __name__ == "__main__":
-    get_artist_image("C:/Users/Adam/Music/My Playlist")
+    get_artist_image("D:/Music/My Playlist")
