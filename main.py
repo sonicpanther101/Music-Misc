@@ -3,8 +3,9 @@ from change_to_flac import convert
 from remove_asterixs_from_lyrics import remove_asterixs_from_lyrics
 from fix_tags import fix_tags
 from artist_image import get_artist_image
-from final_check import confirm_and_move
 from translate_lyrics import translate_lyrics
+from final_check import confirm_and_move
+from tag_normaliser import normalise
 
 def main():
     initial_location = "C:/Users/Adam/Documents/Soulseek Downloads/complete"
@@ -32,6 +33,8 @@ def main():
         translate_lyrics(location)
 
     confirm_and_move(location, playlist)
+
+    normalise(playlist)
 
 if __name__ == "__main__":
     main()
