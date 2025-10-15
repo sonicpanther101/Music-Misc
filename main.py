@@ -7,6 +7,7 @@ from translate_lyrics import translate_lyrics
 from final_check import confirm_and_move
 from tag_normaliser import normalise
 from artist_image import get_artist_image
+from check_images import check_images
 
 def main():
     initial_location = "C:/Users/Adam/Documents/Soulseek Downloads/complete"
@@ -39,7 +40,7 @@ def main():
 
     get_artist_image(playlist)
 
-    
+    check_images(playlist)
 
     print("All done!")
 
