@@ -1,19 +1,61 @@
 import os
 import requests
 from mutagen.flac import FLAC, Picture
-from PIL import Image
+import matplotlib.pyplot as plt
+from matplotlib.image import imread
 from io import BytesIO
-import discogs_client
+from bs4 import BeautifulSoup
+import re
 
 # === CONFIG ===
-DISCOGS_TOKEN = "MUjfKKirKbaTLgdVCUhrgciLdCOsESEIMuePObiV"
 RECURSIVE = True
 CACHE_DIR = "artist_previews"
 ADD_IMAGE_URL_TAG = False  # add ARTISTIMAGEURL tag
 
 # === SETUP ===
 os.makedirs(CACHE_DIR, exist_ok=True)
-HEADERS = {"User-Agent": "DiscogsFlacTool/3.0 (https://discogs.com)"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+}
+
+# Global figure for image display
+fig = None
+ax = None
+
+
+def init_matplotlib():
+    """Initialize matplotlib figure once."""
+    global fig, ax
+    plt.ion()  # Interactive mode
+    fig, ax = plt.subplots(figsize=(10, 10))
+    fig.canvas.manager.set_window_title("Artist Image Preview")
+
+
+def show_image(fname, artist_name, img_num, total):
+    """Display image in the same matplotlib window."""
+    global fig, ax
+    if fig is None:
+        init_matplotlib()
+    
+    try:
+        ax.clear()
+        img = imread(fname)
+        ax.imshow(img)
+        ax.axis('off')
+        ax.set_title(f"{artist_name} - Image {img_num}/{total}", fontsize=14, pad=10)
+        fig.tight_layout()
+        plt.draw()
+        plt.pause(0.1)
+    except Exception as e:
+        print(f"Could not preview image: {e}")
+
+
+def close_matplotlib():
+    """Close the matplotlib window."""
+    global fig
+    if fig is not None:
+        plt.close(fig)
+        fig = None
 
 
 def find_flacs(folder):
@@ -34,8 +76,7 @@ def group_by_album_artist(flac_files):
         try:
             audio = FLAC(path)
             album_artist = audio.get("albumartist", [None])[0]
-            artist = audio.get("artist", ["Unknown Artist"])[0]
-            key = album_artist or artist or "Unknown Artist"
+            key = album_artist or "Unknown Artist"
             artists.setdefault(key, []).append(path)
         except Exception as e:
             print(f"Error reading {path}: {e}")
@@ -69,7 +110,7 @@ def extract_existing_artist_image(flac_paths):
 
 
 def download_and_cache_image(url, artist_name, index):
-    safe_name = artist_name.replace("/", "_").replace("\\", "_")
+    safe_name = artist_name.replace("/", "_").replace("\\", "_").replace(":", "_")
     fname = os.path.join(CACHE_DIR, f"{safe_name}_{index}.jpg")
     if os.path.exists(fname):
         return fname
@@ -80,44 +121,99 @@ def download_and_cache_image(url, artist_name, index):
             f.write(r.content)
         return fname
     except Exception as e:
-        print(f"Could not download image: {e}")
+        print(f"Could not download image from {url}: {e}")
         return None
 
 
-def show_image(fname):
+def scrape_lastfm_artist_images(artist_name):
+    """Scrape artist images from Last.fm page."""
+    # Format artist name for URL
+    artist_url = artist_name.replace(" ", "+")
+    url = f"https://www.last.fm/music/{artist_url}"
+    
+    print(f"Fetching: {url}")
+    
     try:
-        img = Image.open(fname)
-        img.show()
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        r.raise_for_status()
+        
+        soup = BeautifulSoup(r.content, 'html.parser')
+        
+        # Find artist images - Last.fm uses various selectors
+        images = []
+        
+        # Look for the header background image (main artist image)
+        header_bg = soup.find('div', class_='header-new-background-image')
+        if header_bg and header_bg.get('style'):
+            style = header_bg['style']
+            # Extract URL from style="background-image: url(...)"
+            match = re.search(r'url\(["\']?(.*?)["\']?\)', style)
+            if match:
+                img_url = match.group(1)
+                # Convert to highest quality
+                # img_url = img_url.replace('/ar0/', '/300x300/')
+                images.append(img_url)
+                print(f"Found header image: {img_url}")
+        
+        # # Look for avatar images as backup
+        # avatar_imgs = soup.find_all('img', class_=re.compile(r'avatar'))
+        # for img in avatar_imgs:
+        #     src = img.get('src')
+        #     if src and ('lastfm' in src or 'akamaized' in src):
+        #         # Try to get larger version
+        #         src_large = src.replace('/avatar170s/', '/300x300/')
+        #         src_large = src_large.replace('/ar0/', '/300x300/')
+        #         if src_large not in images:
+        #             images.append(src_large)
+        
+        # # Look for any other images with lastfm CDN
+        # all_imgs = soup.find_all('img')
+        # for img in all_imgs:
+        #     src = img.get('src', '')
+        #     if ('lastfm' in src or 'akamaized' in src) and src not in images:
+        #         # Try to get larger version
+        #         src_large = src.replace('/ar0/', '/300x300/')
+        #         src_large = src_large.replace('/avatar170s/', '/300x300/')
+        #         if src_large not in images:
+        #             images.append(src_large)
+        
+        return images
+        
     except Exception as e:
-        print(f"Could not preview image: {e}")
+        print(f"Error scraping Last.fm: {e}")
+        return []
 
 
-def choose_artist_image(discogs, artist_name, current, total):
-    """Search Discogs for this artist and prompt user interactively."""
+def choose_artist_image(artist_name, current, total):
+    """Scrape Last.fm artist images and prompt user interactively."""
     print(f"\n[{current}/{total}] --- Artist: {artist_name} ---")
-    try:
-        results = discogs.search(artist_name, type="artist")
-        for i, artist in enumerate(results.page(1), 1):
-            print(f"\nResult {i}: {artist.name}")
-            print(f"Discogs URL: {artist.url}")
-            if artist.images:
-                for j, img in enumerate(artist.images, 1):
-                    url = img.get("uri")
-                    print(f"→ Showing image {j}/{len(artist.images)} for {artist.name}")
-                    cached = download_and_cache_image(url, artist_name, j)
-                    if cached:
-                        show_image(cached)
-                        choice = input("Use this image? [y]es / [n]ext / [s]kip artist: ").strip().lower()
-                        if choice == "y":
-                            return cached, url
-                        elif choice == "s":
-                            return None, None
-                    else:
-                        print("No image preview available.")
-            else:
-                print("No images found.")
-    except Exception as e:
-        print(f"Discogs search failed for {artist_name}: {e}")
+    
+    images = scrape_lastfm_artist_images(artist_name)
+    
+    if not images:
+        print("No images found on Last.fm.")
+        return None, None
+    
+    print(f"Found {len(images)} images")
+    
+    # Show all images
+    for idx, url in enumerate(images, 1):
+        print(f"\n→ Showing image {idx}/{len(images)} for {artist_name}")
+        print(f"   URL: {url[:80]}...")
+        
+        cached = download_and_cache_image(url, artist_name, idx)
+        
+        if cached:
+            show_image(cached, artist_name, idx, len(images))
+            choice = input("Use this image? [y]es / [n]ext / [s]kip artist: ").strip().lower()
+            if choice == "y":
+                return cached, url
+            elif choice == "s":
+                return None, None
+        else:
+            print("Could not preview this image.")
+    
+    print("No more images available.")
     return None, None
 
 
@@ -166,25 +262,27 @@ def get_artist_image(Folder):
 
     artists = group_by_album_artist(flac_files)
     total_artists = len(artists)
-    discogs = discogs_client.Client("FlacArtistImageApp/3.0", user_token=DISCOGS_TOKEN)
 
-    for index, (artist, flacs) in enumerate(artists.items(), 1):
-        # First, check if any file already has an artist image
-        existing_image, existing_url = extract_existing_artist_image(flacs)
-        if existing_image:
-            print(f"[{index}/{total_artists}] Artist {artist}: already has image, applying to others…")
-            embed_artist_image(flacs, existing_image, existing_url, False)
-            continue
+    try:
+        for index, (artist, flacs) in enumerate(artists.items(), 1):
+            # First, check if any file already has an artist image
+            existing_image, existing_url = extract_existing_artist_image(flacs)
+            if existing_image:
+                print(f"[{index}/{total_artists}] Artist {artist}: already has image, applying to others…")
+                embed_artist_image(flacs, existing_image, existing_url, False)
+                continue
 
-        # If none have one, proceed to prompt user
-        image_path, image_url = choose_artist_image(discogs, artist, index, total_artists)
-        if image_path:
-            with open(image_path, "rb") as f:
-                image_bytes = f.read()
-            embed_artist_image(flacs, image_bytes, image_url)
-        else:
-            print(f"No image used for {artist}.")
+            # If none have one, proceed to prompt user
+            image_path, image_url = choose_artist_image(artist, index, total_artists)
+            if image_path:
+                with open(image_path, "rb") as f:
+                    image_bytes = f.read()
+                embed_artist_image(flacs, image_bytes, image_url)
+            else:
+                print(f"No image used for {artist}.")
+    finally:
+        close_matplotlib()
 
 
 if __name__ == "__main__":
-    get_artist_image("D:/Music/My Playlist")
+    get_artist_image("C:/Users/Adam/Music/My Playlist")
