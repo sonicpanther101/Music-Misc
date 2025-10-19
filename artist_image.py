@@ -246,7 +246,7 @@ def embed_artist_image(flac_paths, image_bytes, image_url, check_needed=True):
 
     for path in flac_paths:
         if has_artist_image(path):
-            print(f"↷ Skipped (already has artist image): {os.path.basename(path)}")
+            # print(f"↷ Skipped (already has artist image): {os.path.basename(path)}")
             continue
 
         try:
@@ -265,15 +265,13 @@ def embed_artist_image(flac_paths, image_bytes, image_url, check_needed=True):
             audio.clear_pictures()
             for p in existing_pics:
                 audio.add_picture(p)
-            if ADD_IMAGE_URL_TAG and image_url:
-                audio["ARTISTIMAGEURL"] = [image_url]
             audio.save()
             print(f"✓ Updated {os.path.basename(path)}")
         except Exception as e:
             print(f"✗ Failed {path}: {e}")
 
 
-def get_artist_image(Folder):
+def get_artist_image(Folder=None):
     if not Folder:
         folder = input("Enter folder path: ").strip()
         if not os.path.isdir(folder):
@@ -314,4 +312,4 @@ def get_artist_image(Folder):
 
 
 if __name__ == "__main__":
-    get_artist_image("D:/Music/My Playlist")
+    get_artist_image()
