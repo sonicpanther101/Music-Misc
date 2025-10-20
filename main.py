@@ -22,8 +22,6 @@ def main():
     convert(location)
     print("Fixing tags")
     fix_tags(location)
-    print("Getting artist images")
-    get_artist_image(playlist)
 
     print("Get lyrics and set replaygain from Foobar2000")
     input("Press Enter to continue...")
@@ -37,13 +35,15 @@ def main():
 
     confirm_and_move(location, playlist)
 
-    normalise(playlist)
+    if input("Do you want to normalise tags? (y/n): ").lower() == "y":
+        normalise(playlist)
 
+    print("Getting artist images")
     get_artist_image(playlist)
 
     normalise_images(playlist)
 
-    check_images(playlist)
+    # check_images(playlist)
 
     print("All done!")
 
