@@ -63,7 +63,11 @@ class SteamMonitor:
                 self.icon.title = title
             
             # Wait 30 seconds before next check
-            time.sleep(30)
+            DURATION = 30
+            for i in range(DURATION):
+                print(f"\r{DURATION-i} seconds till next check    ", end='', flush=True)
+                time.sleep(1)
+            print()
     
     def on_quit(self, icon, item):
         """Handle quit action"""
