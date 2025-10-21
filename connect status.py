@@ -42,10 +42,10 @@ class SteamMonitor:
     def update_status(self):
         """Periodically check Steam status"""
         while self.running:
-            print("Starting status check...")
+            print("\rStarting status check...            ", end='', flush=True)
             self.status = self.check_steam()
 
-            print(f"Steam status: {self.status}")
+            print(f"\rSteam status: {self.status}            ", end='', flush=True)
             
             # Update icon based on status
             if self.status == "online":
@@ -64,10 +64,10 @@ class SteamMonitor:
             
             # Wait 30 seconds before next check
             DURATION = 30
+            print()
             for i in range(DURATION):
                 print(f"\r{DURATION-i} seconds till next check    ", end='', flush=True)
                 time.sleep(1)
-            print()
     
     def on_quit(self, icon, item):
         """Handle quit action"""
