@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from mutagen.flac import FLAC
 import re
+from tqdm import tqdm
 
 def search_lyrics_in_flac(directory, search_string):
     """
@@ -39,7 +40,7 @@ def search_lyrics_in_flac(directory, search_string):
     matches_found = 0
     search_lower = search_string.lower()
     
-    for flac_path in flac_files:
+    for flac_path in tqdm(flac_files, desc="Searching files", unit="file"):
         try:
             audio = FLAC(flac_path)
 
