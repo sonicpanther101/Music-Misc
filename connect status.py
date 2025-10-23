@@ -33,11 +33,11 @@ class SteamMonitor:
             
             # Check if we're still on steampowered.com domain
             if 'instagram.com' in final_domain:
-                return "online"
+                return "🟩 online"
             else:
-                return "redirected"
+                return "🟧 redirected"
         except requests.RequestException:
-            return "offline"
+            return "🟥 offline"
     
     def update_status(self):
         """Periodically check Steam status"""
@@ -48,10 +48,10 @@ class SteamMonitor:
             print(f"\rSteam status: {self.status}            ", end='', flush=True)
             
             # Update icon based on status
-            if self.status == "online":
+            if self.status == "🟩 online":
                 color = 'green'
                 title = "Steam: Online ✓"
-            elif self.status == "redirected":
+            elif self.status == "🟧 redirected":
                 color = 'orange'
                 title = "Steam: Redirected ⚠"
             else:
