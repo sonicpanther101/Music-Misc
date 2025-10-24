@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 FLAC Lyrics Tag Copier
-Copies UNSYNCED LYRICS tag to LYRICS tag while keeping both tags
+Copies unsynced lyrics tag to lyrics tag while keeping both tags
 """
 
 import os
@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 def copy_unsynced_to_lyrics(flac_file):
     """
-    Copy UNSYNCED LYRICS tag to LYRICS tag in a FLAC file.
+    Copy unsynced lyrics tag to lyrics tag in a FLAC file.
     
     Args:
         flac_file: Path to the FLAC file
@@ -23,11 +23,16 @@ def copy_unsynced_to_lyrics(flac_file):
         audio = FLAC(flac_file)
         
         # Check if UNSYNCED LYRICS tag exists
-        if 'UNSYNCED LYRICS' in audio:
-            unsynced_lyrics = audio['UNSYNCED LYRICS']
+        if 'unsynced lyrics' in audio:
+            unsynced_lyrics = audio['unsynced lyrics']
+
+            # Check if lyrics are already in LYRICS tag by checking keys of audio
+            if 'lyrics' in audio:
+                if audio['lyrics'][0] == unsynced_lyrics[0]:
+                    return True
             
             # Copy to LYRICS tag
-            audio['LYRICS'] = unsynced_lyrics
+            audio['lyrics'] = unsynced_lyrics
             
             # Save the file
             audio.save()
@@ -49,7 +54,7 @@ def copy_lyrics(path=None):
     
     print("FLAC Lyrics Tag Copier")
     print("=" * 50)
-    print("This program copies UNSYNCED LYRICS tag to LYRICS tag")
+    print("This program copies unsynced lyrics tag to lyrics tag")
     print("while keeping both tags intact.")
     print("=" * 50)
     print()
@@ -92,11 +97,11 @@ def copy_lyrics(path=None):
         if copy_unsynced_to_lyrics(flac_file):
             processed += 1
         else:
-            tqdm.write(f"  ⊘ {flac_file.name}: No UNSYNCED LYRICS tag found, skipped")
+            tqdm.write(f"  ⊘ {flac_file.name}: No unsynced lyrics tag found, skipped")
             skipped += 1
     
     print("-" * 50)
     print(f"Summary: {processed} file(s) processed, {skipped} file(s) skipped")
 
 if __name__ == "__main__":    
-    copy_lyrics("/storage/emulated/0/Music/My Playlist")
+    copy_lyrics("D:/Music/My Playlist")
