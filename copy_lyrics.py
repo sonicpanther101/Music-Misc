@@ -29,16 +29,16 @@ def copy_unsynced_to_lyrics(flac_file):
             # Check if lyrics are already in LYRICS tag by checking keys of audio
             if 'lyrics' in audio:
                 if audio['lyrics'][0] == unsynced_lyrics[0]:
-                    return True
+                    return 2
             
             # Copy to LYRICS tag
             audio['lyrics'] = unsynced_lyrics
             
             # Save the file
             audio.save()
-            return True
+            return 1
         else:
-            return False
+            return 0
             
     except Exception as e:
         print(f"Error processing {flac_file}: {e}")
@@ -94,11 +94,16 @@ def copy_lyrics(path=None):
     
     # Process files with progress bar
     for flac_file in tqdm(flac_files, desc="Processing FLAC files", unit="file"):
-        if copy_unsynced_to_lyrics(flac_file):
-            processed += 1
-        else:
-            tqdm.write(f"  ⊘ {flac_file.name}: No unsynced lyrics tag found, skipped")
-            skipped += 1
+        match copy_unsynced_to_lyrics(flac_file):
+            case 0:
+                # tqdm.write(f"  ⊘ {flac_file.name}: No unsynced lyrics tag found, skipped")
+                skipped += 1
+            case 1:
+                tqdm.write(f"  ✔ {flac_file.name}: Lyrics copied to LYRICS tag")
+                processed += 1
+            case 2:
+                pass
+                # tqdm.write(f"  ✔ {flac_file.name}: Lyrics already in LYRICS tag")
     
     print("-" * 50)
     print(f"Summary: {processed} file(s) processed, {skipped} file(s) skipped")
