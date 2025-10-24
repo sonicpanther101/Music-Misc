@@ -107,6 +107,9 @@ def process_flac_file(filepath):
             new_pictures = [best_cover[1]]
             new_pictures.extend([pic for _, pic in artist_images])
             # new_pictures.extend([pic for _, pic in other_images])
+
+            # Sort by type
+            new_pictures.sort(key=lambda x: x.type)
             
             # Clear and reassign pictures
             audio.clear_pictures()
