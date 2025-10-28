@@ -32,6 +32,8 @@ def check_time_sync(folder_path):
                     if '[' in line:
                         if ':' in line:
                             timestamps += 1
+                    if '纯音乐，请欣赏' in line:
+                        timestamps = -100
                 if timestamps < 5:
                     # print the artist, title, album in columns
 
