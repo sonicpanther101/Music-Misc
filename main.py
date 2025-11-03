@@ -11,6 +11,7 @@ from artist_image import get_artist_image
 from check_images import process_album_covers
 from image_normaliser import normalise_images
 from fix_3_images import fix_3_images
+from downsize_music import compress_music
 
 def main():
     initial_location = "C:/Users/Adam/Documents/Soulseek Downloads/complete"
@@ -50,6 +51,8 @@ def main():
     process_album_covers(playlist)
 
     fix_3_images(playlist)
+
+    compress_music(playlist)
 
     print("All done!")
 
