@@ -37,6 +37,11 @@ def copy_unsynced_to_lyrics(flac_file):
             # Save the file
             audio.save()
             return 1
+        elif 'lyrics' in audio:
+            # if lyrics are already in LYRICS tag, but not in UNSYNCED LYRICS tag, remove them
+            del audio['lyrics']
+            audio.save()
+            return 2
         else:
             return 0
             
@@ -102,7 +107,7 @@ def copy_lyrics(path=None):
                 tqdm.write(f"  ✔ {flac_file.name}: Lyrics copied to LYRICS tag")
                 processed += 1
             case 2:
-                pass
+                processed += 1
                 # tqdm.write(f"  ✔ {flac_file.name}: Lyrics already in LYRICS tag")
     
     print("-" * 50)
