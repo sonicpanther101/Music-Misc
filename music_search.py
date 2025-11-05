@@ -108,4 +108,4 @@ def main(path=None):
 
 
 if __name__ == "__main__":
-    main("C:/Users/Adam/Music/My Playlist")
+    main("D:/Music/My Playlist")

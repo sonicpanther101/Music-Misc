@@ -82,10 +82,16 @@ def process_flac_file(filepath):
             elif pic.type in [7, 8]:
                 artist_images.append((i, pic))
             else:
-                other_images.append((i, pic))
+                front_covers.append((i, pic, score, w, h, size))
+            
+        # check if song has type 3 image first in list
+        ordered = True
+        if audio.pictures[0].type != 3:
+            ordered = False
+            print(f"  Images are ordered incorrectly")
         
         # If we have multiple front covers, keep only the best one
-        if len(front_covers) > 1 or len(other_images) > 0:
+        if len(front_covers) > 1 or len(other_images) > 0 or (not ordered):
             print(f"Processing: {filepath.name}")
             print(f"  Found {len(audio.pictures)} image(s)")
             for i, pic in enumerate(audio.pictures):
@@ -102,6 +108,10 @@ def process_flac_file(filepath):
             print(f"  Keeping: {best_cover[3]}x{best_cover[4]} ({best_cover[5]:,} bytes)")
             for removed in front_covers[1:]:
                 print(f"  Removing: {removed[3]}x{removed[4]} ({removed[5]:,} bytes)")
+
+            if best_cover[1].type != 3:
+                best_cover[1].type = 3
+                print(f"  Changed {best_cover[1].type} to 3 (front cover)")
             
             # Rebuild pictures list with only the best front cover
             new_pictures = [best_cover[1]]
