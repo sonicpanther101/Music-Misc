@@ -191,7 +191,14 @@ def get_user_input(location = ""):
     
     return folder, output_folder, quality, overwrite, remove_original, dry_run
 
-def convert(location = ""):
+def convert(location = None):
+
+    if not location:
+        location = input("Enter folder path: ").strip()
+        if not os.path.isdir(location):
+            print("Invalid folder.")
+            return
+
     # check that there are non-flac files in the folder
     audio_files = get_audio_files(location)
     if not audio_files:
