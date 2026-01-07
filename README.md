@@ -20,7 +20,7 @@
 ### Stage 2
 - All in `My Playlist` folder
 #### Normalising
-- All tags normalised (if there are different ways to have the tag text like `joan jet & the  blasckhearts` vs `joan jet and the blasckhearts`)
+- All tags normalised (if there are different ways to have the tag text like `joan jet & the blasckhearts` vs `joan jet and the blasckhearts`)
 - All files have artist image chosen by me
 - All images normalised (to get rid of files with same image different size and so on)
 - All images in the order of album then artist for namida

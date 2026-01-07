@@ -1,4 +1,5 @@
 import os
+import readline
 from mutagen.flac import FLAC
 
 songExclusions = [
@@ -14,8 +15,8 @@ def check_time_sync(folder_path):
         if file_path.endswith(".flac"):
             file_path = os.path.join(folder_path, file_path)
             audio = FLAC(file_path)
-            if 'UNSYNCED LYRICS' in audio:
-                lines = audio['UNSYNCED LYRICS'][0].split('\n')
+            if 'lyrics' in audio:
+                lines = audio['lyrics'][0].split('\n')
                 timestamps = 0
                 for line in lines:
                     if '[?]' in line:

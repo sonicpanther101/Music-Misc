@@ -1,6 +1,7 @@
 import mutagen
 from mutagen.flac import FLAC
 import os
+import readline
 import re
 from deep_translator import GoogleTranslator  # Add Google Translate import
 import time  # For rate limiting
@@ -13,7 +14,7 @@ DetectorFactory.seed = 0
 def get_unsynced_lyrics(file_path: str) -> str:
     try:
         audio = FLAC(file_path)
-        return audio.get("UNSYNCED LYRICS", [""])[0]
+        return audio.get("lyrics", [""])[0]
     except mutagen.MutagenError as e:
         print(f"Error retrieving lyrics: {e}")
         return ""
@@ -169,7 +170,7 @@ def translate_lyrics(directory):
         if input("Apply new lyrics? (y/n): ").lower() == "y":
             try:
                 audio = FLAC(file_path)
-                audio["UNSYNCED LYRICS"] = fixed_lyrics
+                audio["lyrics"] = fixed_lyrics
                 audio.save()
                 print("New lyrics applied successfully.")
             except mutagen.MutagenError as e:

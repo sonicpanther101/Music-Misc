@@ -1,4 +1,5 @@
 import os
+import readline
 import urllib.parse
 import requests
 from bs4 import BeautifulSoup

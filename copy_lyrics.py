@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
 FLAC Lyrics Tag Copier
-Copies unsynced lyrics tag to lyrics tag while keeping both tags
+Copies lyrics tag to lyrics tag while keeping both tags
 """
 
 import os
+import readline
 from pathlib import Path
 from mutagen.flac import FLAC
 from tqdm import tqdm
 
 def copy_unsynced_to_lyrics(flac_file):
     """
-    Copy unsynced lyrics tag to lyrics tag in a FLAC file.
+    Copy lyrics tag to lyrics tag in a FLAC file.
     
     Args:
         flac_file: Path to the FLAC file
@@ -22,9 +23,9 @@ def copy_unsynced_to_lyrics(flac_file):
     try:
         audio = FLAC(flac_file)
         
-        # Check if UNSYNCED LYRICS tag exists
-        if 'unsynced lyrics' in audio:
-            unsynced_lyrics = audio['unsynced lyrics']
+        # Check if lyrics tag exists
+        if 'lyrics' in audio:
+            unsynced_lyrics = audio['lyrics']
 
             # Check if lyrics are already in LYRICS tag by checking keys of audio
             if 'lyrics' in audio:
@@ -38,7 +39,7 @@ def copy_unsynced_to_lyrics(flac_file):
             audio.save()
             return 1
         elif 'lyrics' in audio:
-            # if lyrics are already in LYRICS tag, but not in UNSYNCED LYRICS tag, remove them
+            # if lyrics are already in LYRICS tag, but not in lyrics tag, remove them
             del audio['lyrics']
             audio.save()
             return 2
@@ -59,7 +60,7 @@ def copy_lyrics(path=None):
     
     print("FLAC Lyrics Tag Copier")
     print("=" * 50)
-    print("This program copies unsynced lyrics tag to lyrics tag")
+    print("This program copies lyrics tag to lyrics tag")
     print("while keeping both tags intact.")
     print("=" * 50)
     print()
@@ -101,7 +102,7 @@ def copy_lyrics(path=None):
     for flac_file in tqdm(flac_files, desc="Processing FLAC files", unit="file"):
         match copy_unsynced_to_lyrics(flac_file):
             case 0:
-                # tqdm.write(f"  ⊘ {flac_file.name}: No unsynced lyrics tag found, skipped")
+                # tqdm.write(f"  ⊘ {flac_file.name}: No lyrics tag found, skipped")
                 skipped += 1
             case 1:
                 tqdm.write(f"  ✔ {flac_file.name}: Lyrics copied to LYRICS tag")

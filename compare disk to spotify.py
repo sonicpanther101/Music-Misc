@@ -1,5 +1,6 @@
 # get list of files from directory
 import os
+import readline
 
 unfiltered_files = os.listdir("D:/Music/My Playlist")
 files = []

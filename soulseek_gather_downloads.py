@@ -1,5 +1,6 @@
 # search all nested files in directory and move them to the root directory
 import os
+import readline
 import shutil
 
 def search_files_recursive(directory):

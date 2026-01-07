@@ -5,6 +5,7 @@ Finds inconsistencies in FLAC file tags and allows interactive standardization.
 """
 
 import os
+import readline
 from pathlib import Path
 from collections import defaultdict
 from difflib import SequenceMatcher

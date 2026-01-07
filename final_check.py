@@ -1,4 +1,5 @@
 import os
+import readline
 from mutagen.flac import FLAC
 import re
 import unicodedata
@@ -34,7 +35,7 @@ def ask_skip(message):
 def confirm_and_move(directory, new_directory):
     flacs = get_flacs(directory)
     required_tags = [
-        "artist", "title", "album", "date", "UNSYNCED LYRICS",
+        "artist", "title", "album", "date", "lyrics",
         "albumartist", "replaygain_album_gain", "replaygain_album_peak",
         "replaygain_track_gain", "replaygain_track_peak"
     ]

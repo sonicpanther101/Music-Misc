@@ -6,6 +6,7 @@ Preserves artist images and other picture types.
 """
 
 import os
+import readline
 import sys
 from pathlib import Path
 from mutagen.flac import FLAC, Picture

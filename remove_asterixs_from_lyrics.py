@@ -1,4 +1,5 @@
 import os
+import readline
 import sys
 from mutagen import File
 from mutagen.flac import FLAC
@@ -10,7 +11,7 @@ init(autoreset=True)
 songs = []
 
 def find_lyrics_with_star(directory):
-    """Scan audio files for unsynced lyrics containing '*' and print matching titles."""
+    """Scan audio files for lyrics containing '*' and print matching titles."""
     found_songs = []
     for root, _, files in os.walk(directory):
         for file in files:
@@ -20,8 +21,8 @@ def find_lyrics_with_star(directory):
                 # Process FLAC files
                 if file.lower().endswith('.flac'):
                     audio = FLAC(file_path)
-                    if 'unsynced lyrics' in audio:
-                        lyrics = audio['unsynced lyrics'][0].replace('\r', '')
+                    if 'lyrics' in audio:
+                        lyrics = audio['lyrics'][0].replace('\r', '')
                         if '*' in lyrics:
                             title = audio.get('title', [file])[0]
                             found_songs.append({
@@ -41,6 +42,8 @@ def replacements(string):
     fixes = {
         "*************": "motherfuckers",
         "************": "motherfucker",
+        "m********e" : "masterbate",
+        "m*******a": "marijuana",
         "********": "bullshit",
         "b******t": "bullshit",
         "*******": "fucking",
@@ -48,16 +51,30 @@ def replacements(string):
         "****in'": "fuckin'",
         "****ing": "fucking",
         "f***ing": "fucking",
+        "coc*ine": "cocaine",
+        "c*****e": "cocaine",
+        "a*****e": "asshole",
+        "a**hole": "asshole",
         "****ed": "fucked",
         "******": "fucked",
         "*****y": "bitchy",
+        "n***er": "nigger",
+        "h****n": "heroin",
+        "h***n": "heroin",
         "*****": "bitch",
         "b***h": "bitch",
+        "b**th": "bitch",
         "b**ch": "bitch",
         "b*tch": "bitch",
         "B***h": "Bitch",
         "B**ch": "Bitch",
         "B*tch": "Bitch",
+        "p***s": "penis",
+        "w***e": "whore",
+        "n***a": "nigga",
+        "p***y": "pussy",
+        "p*ssy": "pussy",
+        "h***a": "hella",
         "f*ck": "fuck",
         "f***": "fuck",
         "f**k": "fuck",
@@ -79,27 +96,16 @@ def replacements(string):
         "D**E": "DOPE",
         "d**g": "drug",
         "dr*g": "drug",
+        "c**k": "cock",
+        "c*ck": "cock",
+        "p**n": "porn",
+        "p*rn": "porn",
+        "a***": "arse",
         "s*x": "sex",
         "***": "sex",
         "h*e": "hoe",
-        "c**k": "cock",
-        "c*ck": "cock",
-        "coc*ine": "cocaine",
-        "c*****e": "cocaine",
-        "m*******a": "marijuana",
-        "p**n": "porn",
-        "p*rn": "porn",
-        "w***e": "whore",
-        "a*****e": "asshole",
-        "a**hole": "asshole",
-        "a***": "arse",
         "a**": "ass",
-        "a*s": "ass",
-        "h***n": "heroin",
-        "n***a": "nigga",
-        "n***er": "nigger",
-        "p***y": "pussy",
-        "p*ssy": "pussy"
+        "a*s": "ass"
     }
     for pattern, replacement in fixes.items():
         string = string.replace(pattern, replacement)
@@ -157,7 +163,7 @@ def process_auto_replacement(song):
         print(f"\n{Fore.YELLOW}Applying {applied_changes} changes to file...")
         
         # Join the modified lyrics back into a single string
-        song['audio']['unsynced lyrics'] = '\n'.join(new_lyrics)
+        song['audio']['lyrics'] = '\n'.join(new_lyrics)
         
         try:
             song['audio'].save()
@@ -176,7 +182,7 @@ def process_manual_replacement(song):
     print(f"{Fore.BLUE}File: {song['path']}")
     
     # Get current lyrics (might have been modified in auto phase)
-    current_lyrics = song['audio'].get('unsynced lyrics', [''])[0].replace('\r', '')
+    current_lyrics = song['audio'].get('lyrics', [''])[0].replace('\r', '')
     lines = current_lyrics.split('\n')
     
     # Find lines with remaining asterisks
@@ -220,7 +226,7 @@ def process_manual_replacement(song):
                     lines[i] = replacement
                     
                     # Update lyrics in memory
-                    song['audio']['unsynced lyrics'] = '\n'.join(lines)
+                    song['audio']['lyrics'] = '\n'.join(lines)
                     
                     # Save to file
                     song['audio'].save()
@@ -253,10 +259,10 @@ def remove_asterixs_from_lyrics(directory=None):
     songs = find_lyrics_with_star(target_dir)
     
     if not songs:
-        print(f"{Fore.YELLOW}No songs with unsynced lyrics containing '*' found")
+        print(f"{Fore.YELLOW}No songs with lyrics containing '*' found")
         return
     
-    print(f"\n{Fore.GREEN}Found {len(songs)} songs with unsynced lyrics containing '*'")
+    print(f"\n{Fore.GREEN}Found {len(songs)} songs with lyrics containing '*'")
     
     # Phase 2: Automatic replacement
     print(f"{Fore.BLUE}\n===== Phase 2: Automatic Replacement =====")

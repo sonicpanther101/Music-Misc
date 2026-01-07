@@ -4,6 +4,7 @@ Search for a string in FLAC file lyrics tags and display matching songs.
 """
 
 import os
+import readline
 import sys
 from pathlib import Path
 from mutagen.flac import FLAC
@@ -12,7 +13,7 @@ from tqdm import tqdm
 
 def search_lyrics_in_flac(directory, search_string):
     """
-    Search for a string in unsynced lyrics tags of FLAC files.
+    Search for a string in lyrics tags of FLAC files.
     
     Args:
         directory: Path to directory containing FLAC files
@@ -44,10 +45,10 @@ def search_lyrics_in_flac(directory, search_string):
         try:
             audio = FLAC(flac_path)
 
-            # Check for unsynced lyrics tag (LYRICS or UNSYNCEDLYRICS)
+            # Check for lyrics tag (LYRICS or UNSYNCEDLYRICS)
             lyrics = None
-            if 'UNSYNCED LYRICS' in audio:
-                lyrics = audio['UNSYNCED LYRICS'][0]
+            if 'lyrics' in audio:
+                lyrics = audio['lyrics'][0]
             elif 'LYRICS' in audio:
                 lyrics = audio['LYRICS'][0]
 

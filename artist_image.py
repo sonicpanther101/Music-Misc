@@ -1,4 +1,5 @@
 import os
+import readline
 import requests
 from mutagen.flac import FLAC, Picture
 import matplotlib.pyplot as plt

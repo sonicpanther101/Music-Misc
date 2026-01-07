@@ -6,6 +6,7 @@ while preserving all metadata and embedded images.
 """
 
 import os
+import readline
 import sys
 import subprocess
 from pathlib import Path

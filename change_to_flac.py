@@ -6,6 +6,7 @@ Run the script and input values interactively.
 """
 
 import os
+import readline
 import subprocess
 from pathlib import Path
 

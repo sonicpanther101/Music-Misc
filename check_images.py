@@ -1,4 +1,5 @@
 import os
+import readline
 import subprocess
 import requests
 from mutagen.flac import FLAC, Picture
