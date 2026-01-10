@@ -27,3 +27,6 @@
 #### Optimising
 - There should only ever be 2 images on each song file
 - All songs should be at 16 bit 44.1kHz and no less unless no better version is available (should be checked thoroughly)
+
+### TODO:
+- [ ] LastFM Tag scraper for capitalisation of songs and genres
