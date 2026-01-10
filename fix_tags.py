@@ -30,9 +30,16 @@ def confirm(prompt):
 def fix_tags(directory):
     flacs = get_flacs(directory)
     required_tags = ["artist", "title", "album", "date", "albumartist"]
-
-    for flac in flacs:
-        print(f"\n🎧 Checking: {flac}")
+    
+    # Dictionary to store user preferences for artist formatting
+    artist_preferences = {}
+    # Dictionary to store user preferences for filename changes
+    rename_preferences = {}
+    
+    total = len(flacs)
+    
+    for idx, flac in enumerate(flacs, 1):
+        print(f"\n[{idx}/{total}] 🎧 Checking: {flac}")
         audio_file = FLAC(flac)
         updated = False
 
@@ -70,8 +77,14 @@ def fix_tags(directory):
             flags=re.IGNORECASE
         )
         formatted_artist = re.sub(r"(; )+", "; ", formatted_artist).strip("; ").strip()
+        
         if formatted_artist != artist:
-            if confirm(f"Change artist '{artist}' → '{formatted_artist}'?"):
+            # Check if we've already asked about this specific formatting change
+            change_key = (artist, formatted_artist)
+            if change_key not in artist_preferences:
+                artist_preferences[change_key] = confirm(f"Change artist '{artist}' → '{formatted_artist}'?")
+            
+            if artist_preferences[change_key]:
                 audio_file["artist"] = [formatted_artist]
                 updated = True
 
@@ -120,7 +133,23 @@ def fix_tags(directory):
 
         if current_name != expected_name:
             print(f"Filename differs:\n  Current: {current_name}\n  Expected: {expected_name}")
-            if confirm("Rename file?"):
+            
+            # Create a key based on the type of change (e.g., "AC,DC" -> "AC-DC")
+            # Extract the pattern of the change to reuse the decision
+            rename_pattern = None
+            if "AC,DC" in current_name and "AC-DC" in expected_name:
+                rename_pattern = "AC,DC->AC-DC"
+            
+            # Check if we've already made a decision on this type of rename
+            should_rename = None
+            if rename_pattern and rename_pattern in rename_preferences:
+                should_rename = rename_preferences[rename_pattern]
+            else:
+                should_rename = confirm("Rename file?")
+                if rename_pattern:
+                    rename_preferences[rename_pattern] = should_rename
+            
+            if should_rename:
                 new_path = os.path.join(os.path.dirname(flac), expected_name)
                 try:
                     os.rename(flac, new_path)
@@ -133,4 +162,4 @@ def fix_tags(directory):
             print(f"✔ Filename already correct: {current_name}")
 
 if __name__ == "__main__":
-    fix_tags("D:/Music/New unformated songs")
+    fix_tags("/home/adam/driveBig/Music/My Playlist")

@@ -6,7 +6,6 @@ from artist_image import get_artist_image
 from translate_lyrics import translate_lyrics
 from final_check import confirm_and_move
 from tag_normaliser import normalise
-from copy_lyrics import copy_lyrics
 from artist_image import get_artist_image
 from check_images import process_album_covers
 from image_normaliser import normalise_images
@@ -40,8 +39,6 @@ def main():
 
     if input("Do you want to normalise tags? (y/n): ").lower() == "y":
         normalise(playlist)
-        
-    copy_lyrics(playlist)
 
     print("Getting artist images")
     get_artist_image(playlist)

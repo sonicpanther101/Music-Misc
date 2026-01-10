@@ -227,7 +227,7 @@ def apply_changes(folder_path, tag, standard_value, variations):
     else:
         print("Changes cancelled.")
 
-def normalise(path):
+def normalise(path = None):
     print("FLAC Tag Consistency Checker")
     print("="*60)
     
@@ -280,7 +280,7 @@ def normalise(path):
 
 if __name__ == "__main__":
     try:
-        normalise()
+        normalise("/home/adam/driveBig/Music/My Playlist")
     except KeyboardInterrupt:
         print("\n\nOperation cancelled by user.")
     except Exception as e:

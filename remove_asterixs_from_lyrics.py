@@ -72,15 +72,20 @@ def replacements(string):
         "p***s": "penis",
         "w***e": "whore",
         "n***a": "nigga",
+        "n**ga": "nigga",
         "p***y": "pussy",
+        "p**sy": "pussy",
+        "P**sy": "Pussy",
+        "P*ssy": "Pussy",
         "p*ssy": "pussy",
         "h***a": "hella",
+        "s***t": "shit",
         "f*ck": "fuck",
         "f***": "fuck",
         "f**k": "fuck",
         "F**k": "Fuck",
         "F**K": "FUCK",
-        "****": "shit",
+        # "****": "shit",
         "s**t": "shit",
         "sh*t": "shit",
         "Sh*t": "Shit",
@@ -88,6 +93,7 @@ def replacements(string):
         "S**T": "SHIT",
         "h**l": "hell",
         "d**k": "dick",
+        "D**n": "Damn",
         "d**n": "damn",
         "d*mn": "damn",
         "d*pe": "dope",
@@ -101,15 +107,39 @@ def replacements(string):
         "p**n": "porn",
         "p*rn": "porn",
         "a***": "arse",
-        "s*x": "sex",
-        "***": "sex",
+        "H*p*": "Hump",
+        "h**s": "hoes",
         "h*e": "hoe",
+        "s*x": "sex",
+        # "***": "sex",
         "a**": "ass",
+        "A**": "Ass",
         "a*s": "ass"
     }
     for pattern, replacement in fixes.items():
         string = string.replace(pattern, replacement)
     return string
+
+def save_with_retry(audio, path, max_retries=3, retry_delay=2):
+    """Attempt to save the audio file with retries if the file is locked."""
+    for attempt in range(max_retries):
+        try:
+            audio.save()
+            print(f"{Fore.GREEN}Successfully saved changes!")
+            return True
+        except PermissionError:
+            if attempt < max_retries - 1:
+                print(f"{Fore.YELLOW}File is locked (possibly open in media player). Retrying in {retry_delay} seconds...")
+                print(f"{Fore.YELLOW}Please close the file in your media player and wait...")
+                time.sleep(retry_delay)
+            else:
+                print(f"{Fore.RED}Failed to save: File is still locked after {max_retries} attempts")
+                print(f"{Fore.RED}Please close '{path}' in your media player and try again")
+                return False
+        except Exception as e:
+            print(f"{Fore.RED}Error saving file: {str(e)}")
+            return False
+    return False
 
 def process_auto_replacement(song):
     """Process a song with interactive approval for known patterns"""
@@ -165,13 +195,7 @@ def process_auto_replacement(song):
         # Join the modified lyrics back into a single string
         song['audio']['lyrics'] = '\n'.join(new_lyrics)
         
-        try:
-            song['audio'].save()
-            print(f"{Fore.GREEN}Successfully updated lyrics!")
-            return True
-        except Exception as e:
-            print(f"{Fore.RED}Error saving changes: {str(e)}")
-            return False
+        return save_with_retry(song['audio'], song['path'])
     else:
         print(f"{Fore.YELLOW}No changes applied")
         return False
@@ -180,6 +204,13 @@ def process_manual_replacement(song):
     """Manual replacement phase for remaining asterisks"""
     print(f"\n{Fore.CYAN}===== Manual Replacement: {song['title']} =====")
     print(f"{Fore.BLUE}File: {song['path']}")
+
+    # Reload the audio file to get the latest version
+    try:
+        song['audio'] = FLAC(song['path'])
+    except Exception as e:
+        print(f"{Fore.RED}Error reloading file: {str(e)}")
+        return
     
     # Get current lyrics (might have been modified in auto phase)
     current_lyrics = song['audio'].get('lyrics', [''])[0].replace('\r', '')
@@ -228,10 +259,15 @@ def process_manual_replacement(song):
                     # Update lyrics in memory
                     song['audio']['lyrics'] = '\n'.join(lines)
                     
-                    # Save to file
-                    song['audio'].save()
-                    print(f"{Fore.GREEN}Replacement applied!")
-                    break
+                    # Save to file with retry logic
+                    if save_with_retry(song['audio'], song['path']):
+                        break
+                    else:
+                        # If save failed, ask if user wants to try again
+                        retry = input(f"{Fore.YELLOW}Retry saving? ({Fore.GREEN}y{Style.RESET_ALL}/{Fore.RED}n{Style.RESET_ALL}): ").strip().lower()
+                        if retry != 'y':
+                            print(f"{Fore.RED}Changes not saved. Moving to next line.")
+                            break
                 elif confirm == 'n':
                     print(f"{Fore.YELLOW}Replacement discarded")
                     break

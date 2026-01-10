@@ -189,4 +189,4 @@ def normalise_images(path=None):
     print(f"{'='*60}")
 
 if __name__ == "__main__":
-    normalise_images("C:/Users/Adam/Music/My Playlist")
+    normalise_images("/home/adam/driveBig/Music/My Playlist")

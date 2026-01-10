@@ -2,6 +2,8 @@ import os
 import readline
 import requests
 from mutagen.flac import FLAC, Picture
+import matplotlib
+matplotlib.use('GTK3Agg')  # or 'Qt5Agg' if you have Qt installed
 import matplotlib.pyplot as plt
 from matplotlib.image import imread
 from io import BytesIO
@@ -313,4 +315,4 @@ def get_artist_image(Folder=None):
 
 
 if __name__ == "__main__":
-    get_artist_image()
+    get_artist_image("/home/adam/driveBig/Music/My Playlist")

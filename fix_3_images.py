@@ -186,4 +186,4 @@ def fix_3_images(path=None):
     print(f"Done! Modified {modified_count} file(s)")
 
 if __name__ == "__main__":
-    fix_3_images("D:/Music/My Playlist")
+    fix_3_images("/home/adam/driveBig/Music/My Playlist")

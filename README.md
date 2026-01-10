@@ -14,9 +14,9 @@
 - File title is to be `title - artist` and if it isn't a single, ` - album`. The tagscanner code for this is: `%title% - %artist%$if($equal(%title%,%album%),, - %album%)`
 - All in `New unformated songs` folder for proceeding steps
 ##### Lyrics
+- Lyrics on the `LYRICS` tag for phone app (might struggle on foobar openlyrics)
 - No Asterixs in lyrics (no need for censorship on locally hosted music)
 - Translated copy of the lyrics in brackets at the same timestamp
-- Lyrics on the `LYRICS` tag for phone app (might struggle on foobar openlyrics)
 ### Stage 2
 - All in `My Playlist` folder
 #### Normalising

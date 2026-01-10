@@ -177,4 +177,4 @@ def compress_music(path = None):
     process_folder(folder_path, in_place)
 
 if __name__ == '__main__':
-    compress_music("D:/Music/My Playlist")
+    compress_music("/home/adam/driveBig/Music/My Playlist")
