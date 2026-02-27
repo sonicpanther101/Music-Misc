@@ -521,4 +521,4 @@ def process_album_covers(folder=None):
 
 
 if __name__ == "__main__":
-    process_album_covers("D:/Music/My Playlist")
+    process_album_covers("/home/adam/driveBig/Music/My Playlist")

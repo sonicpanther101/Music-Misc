@@ -7,7 +7,7 @@ songExclusions = [
     ["Blink-182", "Fuck Face"],
     ["Car Seat Headrest", "Stop Smoking"],
     ["DIIV", "Home"],
-
+    ["Daft Punk", "Superheroes"]
 ]
 
 def check_time_sync(folder_path):

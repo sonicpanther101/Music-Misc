@@ -15,18 +15,23 @@
 - All in `New unformated songs` folder for proceeding steps
 ##### Lyrics
 - Lyrics on the `LYRICS` tag for phone app (might struggle on foobar openlyrics)
+- Get lyrics from https://elevenlabs.io/audio-to-text if not on sources.
+- Check all songs have lyrics using script.
 - No Asterixs in lyrics (no need for censorship on locally hosted music)
 - Translated copy of the lyrics in brackets at the same timestamp
 ### Stage 2
 - All in `My Playlist` folder
+- Replaygain all songs (scan as albums)
 #### Normalising
 - All tags normalised (if there are different ways to have the tag text like `joan jet & the blasckhearts` vs `joan jet and the blasckhearts`)
+- Redo file names
 - All files have artist image chosen by me
 - All images normalised (to get rid of files with same image different size and so on)
-- All images in the order of album then artist for namida
+- Check images (.py)
+- All images in the order of album then artist for namida (fix 3 images.py)
 #### Optimising
-- There should only ever be 2 images on each song file
-- All songs should be at 16 bit 44.1kHz and no less unless no better version is available (should be checked thoroughly)
+- There should only ever be 2 images on each song file (fix 3 images.py)
+- All songs should be at 16 bit 44.1kHz and no less unless no better version is available (should be checked thoroughly) (downsize music.py)
 
 ### TODO:
 - [ ] LastFM Tag scraper for capitalisation of songs and genres
