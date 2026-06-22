@@ -9,7 +9,16 @@ in that album as a single ';'-separated string of tags
 
 The original GENRE tag is fully replaced, not appended to.
 
+Tip: run musicbrainz_id_tagger.py on your library first. If a track has
+a MUSICBRAINZ_ARTISTID / MUSICBRAINZ_ALBUMARTISTID tag, this script
+will use it to query Last.fm unambiguously by ID, avoiding name
+collisions (e.g. a generic band name like "Confetti" matching a
+completely different, unrelated act on Last.fm).
+
 Tag resolution order per album:
+    0. If an MBID tag is present: artist.getTopTags by MusicBrainz
+       Artist ID -- unambiguous, but artist-level rather than
+       album-specific
     1. Last.fm album.getTopTags for (artist, album)
     2. Fallback: Last.fm track.getTopTags, tried against the album title
        itself, then against every distinct TITLE found among its files.
@@ -142,6 +151,18 @@ def get_track_title(audio: FLAC):
     return title.strip() if title else None
 
 
+def get_artist_mbid(audio: FLAC):
+    """
+    Return the MusicBrainz Artist ID for a FLAC file, if present.
+    Prefers MUSICBRAINZ_ALBUMARTISTID, falls back to MUSICBRAINZ_ARTISTID.
+    These are written by musicbrainz_id_tagger.py.
+    """
+    mbid = audio.get("musicbrainz_albumartistid", [None])[0]
+    if not mbid:
+        mbid = audio.get("musicbrainz_artistid", [None])[0]
+    return mbid.strip() if mbid else None
+
+
 def get_album_key(audio: FLAC):
     """
     Build a grouping key from a FLAC file's tags.
@@ -188,6 +209,26 @@ def scan_albums(root: Path):
         albums.setdefault(key, []).append(flac_path)
 
     return albums, skipped
+
+
+def fetch_lastfm_artist_tags_by_mbid(api_key: str, artist_mbid: str, min_weight: int = 0, denylist: Optional[set] = None):
+    """
+    Query Last.fm's artist.getTopTags using a MusicBrainz Artist ID
+    instead of an artist name string. This sidesteps name-collision
+    problems entirely (e.g. a generic band name matching an unrelated
+    act on Last.fm), since the MBID is unambiguous.
+
+    Requires the MBID to have been written by musicbrainz_id_tagger.py
+    (or similar) into MUSICBRAINZ_ARTISTID / MUSICBRAINZ_ALBUMARTISTID.
+    """
+    params = {
+        "method": "artist.gettoptags",
+        "mbid": artist_mbid,
+        "api_key": api_key,
+        "format": "json",
+    }
+
+    return _query_lastfm_tags(params, f"mbid:{artist_mbid} (artist)", min_weight, denylist)
 
 
 def fetch_lastfm_tags(api_key: str, artist: str, album: str, min_weight: int = 0, denylist: Optional[set] = None):
@@ -319,6 +360,13 @@ def prompt_manual_tags(search_url: Optional[str] = None):
 def resolve_album_tags(api_key, artist, album, files, min_weight, denylist, delay, interactive):
     """
     Try to get a list of genre tags for an album, in this order:
+      0. If any file in the album has a MUSICBRAINZ_ARTISTID /
+         MUSICBRAINZ_ALBUMARTISTID tag (written by
+         musicbrainz_id_tagger.py), use artist.getTopTags with that
+         MBID. This is unambiguous -- it sidesteps name collisions like
+         "Confetti" matching the wrong band entirely. These are
+         artist-level tags, not album-specific, but they're a great,
+         risk-free first guess.
       1. album.getTopTags for (artist, album)
       2. track.getTopTags for the album title itself, treated as a track
          name. This covers singles where Last.fm's "track" page exists
@@ -333,6 +381,24 @@ def resolve_album_tags(api_key, artist, album, files, min_weight, denylist, dela
 
     Returns a list of tags, or None if the album should be left untouched.
     """
+    # Step 0: MBID-based artist lookup, if available.
+    artist_mbid = None
+    for f in files:
+        try:
+            audio = FLAC(f)
+        except Exception:
+            continue
+        artist_mbid = get_artist_mbid(audio)
+        if artist_mbid:
+            break
+
+    if artist_mbid:
+        tags = fetch_lastfm_artist_tags_by_mbid(api_key, artist_mbid, min_weight=min_weight, denylist=denylist)
+        if tags:
+            tqdm.write(f"    Found tags via MusicBrainz artist ID ({artist_mbid}).")
+            return tags
+        tqdm.write(f"    No tags via MusicBrainz artist ID ({artist_mbid}); falling back to name-based lookup.")
+
     while True:
         tags = fetch_lastfm_tags(api_key, artist, album, min_weight=min_weight, denylist=denylist)
         if tags:
