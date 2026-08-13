@@ -1,6 +1,6 @@
 # Credentials you get from registering a new application
-client_id = '91c9aac04c7249f39ebe5bbf9711d1d1'
-client_secret = '3632246d1b834d24913af57f44b01550'
+client_id = 
+client_secret = 
 redirect_uri = 'https://pypi.org/project/spotify-dl/'
 
 # OAuth endpoints given in the Spotify API documentation

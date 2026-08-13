@@ -26,7 +26,7 @@ except ImportError:
     sys.exit("Please install requests:  pip install requests")
 
 LASTFM_USERNAME = "sonicpanther101"
-LASTFM_API_KEY  = "f92a7517d4ed4c28d295cc50585278f8"   # get a free key at https://www.last.fm/api/account/create
+LASTFM_API_KEY  = # get a free key at https://www.last.fm/api/account/create
 LASTFM_BASE     = "https://ws.audioscrobbler.com/2.0/"
 
 SESSION = requests.Session()
