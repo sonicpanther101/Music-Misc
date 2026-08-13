@@ -19,11 +19,12 @@
 - Check all songs have lyrics using script.
 - No Asterixs in lyrics (no need for censorship on locally hosted music)
 - Translated copy of the lyrics in brackets at the same timestamp
+- Get genre tags from lastfm entries using script
 ### Stage 2
 - All in `My Playlist` folder
 - Replaygain all songs (scan as albums)
 #### Normalising
-- All tags normalised (if there are different ways to have the tag text like `joan jet & the blasckhearts` vs `joan jet and the blasckhearts`)
+- All tags normalised (if there are different ways to have the tag text like `joan jet & the blackhearts` vs `joan jet and the blackhearts`)
 - Redo file names
 - All files have artist image chosen by me
 - All images normalised (to get rid of files with same image different size and so on)
@@ -34,4 +35,11 @@
 - All songs should be at 16 bit 44.1kHz and no less unless no better version is available (should be checked thoroughly) (downsize music.py)
 
 ### TODO:
-- [ ] LastFM Tag scraper for capitalisation of songs and genres 
+- [ ] LastFM Tag scraper for capitalisation of songs
+
+## IPod adding and removing songs
+
+```python
+python3 ./3build_db.py
+sync
+```

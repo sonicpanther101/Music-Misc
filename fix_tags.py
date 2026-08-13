@@ -162,4 +162,4 @@ def fix_tags(directory):
             print(f"✔ Filename already correct: {current_name}")
 
 if __name__ == "__main__":
-    fix_tags("/home/adam/driveBig/Music/My Playlist")
+    fix_tags("/home/adam/driveBig/Music/New unformated songs")

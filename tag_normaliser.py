@@ -280,7 +280,7 @@ def normalise(path = None):
 
 if __name__ == "__main__":
     try:
-        normalise("/home/adam/driveBig/Music/My Playlist")
+        normalise("/home/adam/driveBig/Music/New unformated songs/The Dark Side of the Moon")
     except KeyboardInterrupt:
         print("\n\nOperation cancelled by user.")
     except Exception as e:

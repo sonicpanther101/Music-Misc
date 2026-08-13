@@ -19,6 +19,10 @@
             python
             pythonPackages.pip
             pkgs.stdenv.cc.cc.lib
+
+            pythonPackages.numpy
+            pythonPackages.scipy
+            pythonPackages.soundfile
             
             # GTK3 and all dependencies
             pkgs.gtk3

@@ -68,6 +68,6 @@ def check_time_sync(folder_path):
                 print(f"{"":90}{artist:30} {title:30} {album:30}")
 
 if __name__ == "__main__":
-    folder_path = "/home/adam/driveBig/Music/New unformated songs" # input("Enter the path to the folder: ")
+    folder_path = "/home/adam/driveBig/Music/My Playlist" # input("Enter the path to the folder: ")
 
     check_time_sync(folder_path)

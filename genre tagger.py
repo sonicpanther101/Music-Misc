@@ -32,20 +32,51 @@ Tag resolution order per album:
 A built-in + optional user-supplied denylist filters out common junk
 tags (e.g. "seen live", "favorite", "cd").
 
+API KEY STORAGE:
+    Instead of passing your Last.fm API key on the command line (where
+    it can end up in shell history, process lists, etc.), this script
+    stores it encrypted on disk and asks you for a password to decrypt
+    it each time you run it.
+
+    First-time setup:
+        python lastfm_genre_tagger.py --set-api-key
+
+    This will ask for your Last.fm API key and a password to encrypt it
+    with, then save the encrypted key to (by default):
+        ~/.lastfm_genre_tagger/api_key.enc
+
+    Every subsequent run just asks for that password:
+        python lastfm_genre_tagger.py /path/to/music/folder
+
+    The password is never stored anywhere -- only the encrypted API key
+    is. If you forget the password, just run --set-api-key again to
+    overwrite it with a new key/password pair.
+
 Requirements:
-    pip install mutagen requests tqdm
+    pip install mutagen requests tqdm cryptography
 
 Usage:
-    python lastfm_genre_tagger.py /path/to/music/folder --api-key YOUR_LASTFM_KEY
+    # One-time: store your API key, encrypted with a password of your choosing
+    python lastfm_genre_tagger.py --set-api-key
+
+    # Normal run (uses sensible defaults for everything else; asks for
+    # your password once to unlock the stored API key)
+    python lastfm_genre_tagger.py /path/to/music/folder
+
+    # Run in the current directory (folder is optional, defaults to ".")
+    python lastfm_genre_tagger.py
 
     # Preview changes without writing anything:
-    python lastfm_genre_tagger.py /path/to/music/folder --api-key YOUR_LASTFM_KEY --dry-run
+    python lastfm_genre_tagger.py /path/to/music/folder --dry-run
 
     # Add your own denylist entries on top of the built-in ones:
-    python lastfm_genre_tagger.py /path/to/music/folder --api-key YOUR_LASTFM_KEY --denylist-file my_denylist.txt
+    python lastfm_genre_tagger.py /path/to/music/folder --denylist-file my_denylist.txt
 
     # Never pause for manual input; just skip albums with no tags found:
-    python lastfm_genre_tagger.py /path/to/music/folder --api-key YOUR_LASTFM_KEY --no-prompt
+    python lastfm_genre_tagger.py /path/to/music/folder --no-prompt
+
+    # Use a non-default location for the encrypted key file:
+    python lastfm_genre_tagger.py /path/to/music/folder --key-file /path/to/key.enc
 
 How to get a free Last.fm API key:
     1. Go to https://www.last.fm/api/account/create
@@ -60,6 +91,9 @@ How to get a free Last.fm API key:
 """
 
 import argparse
+import base64
+import getpass
+import os
 import sys
 import time
 import urllib.parse
@@ -67,10 +101,24 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from mutagen.flac import FLAC
 from tqdm import tqdm
 
 LASTFM_API_URL = "https://ws.audioscrobbler.com/2.0/"
+
+# Where the encrypted API key lives by default. Overridable with --key-file.
+DEFAULT_KEY_FILE = Path.home() / ".lastfm_genre_tagger" / "api_key.enc"
+
+# Default location for the skipped-albums log, written automatically at
+# the end of a run if any albums were skipped (override with --log-file,
+# or disable with --no-log).
+DEFAULT_LOG_FILE = "skipped_albums.log"
+
+# PBKDF2 iteration count for deriving the encryption key from the password.
+PBKDF2_ITERATIONS = 480_000
 
 # Tags that are noise on Last.fm: personal labels ("seen live", own username),
 # meta/list tags, decade/year tags that aren't really genres, etc.
@@ -116,6 +164,105 @@ DEFAULT_DENYLIST = {
     "n/a",
 }
 
+
+# --------------------------------------------------------------------------
+# Encrypted API key handling
+# --------------------------------------------------------------------------
+
+def _derive_fernet_key(password: str, salt: bytes) -> bytes:
+    """Derive a Fernet-compatible key from a password + salt via PBKDF2."""
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=PBKDF2_ITERATIONS,
+    )
+    return base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
+
+
+def save_encrypted_api_key(api_key: str, password: str, path: Path):
+    """Encrypt api_key with password and write it (plus a fresh salt) to path."""
+    salt = os.urandom(16)
+    fernet_key = _derive_fernet_key(password, salt)
+    token = Fernet(fernet_key).encrypt(api_key.encode("utf-8"))
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as f:
+        f.write(salt + b"\n" + token)
+
+    try:
+        os.chmod(path, 0o600)  # best-effort: owner read/write only
+    except OSError:
+        pass
+
+
+def load_encrypted_api_key(password: str, path: Path) -> str:
+    """Decrypt and return the API key stored at path, using password."""
+    with path.open("rb") as f:
+        data = f.read()
+
+    try:
+        salt, token = data.split(b"\n", 1)
+    except ValueError:
+        raise ValueError(f"Key file {path} is malformed. Re-run with --set-api-key.")
+
+    fernet_key = _derive_fernet_key(password, salt)
+    try:
+        return Fernet(fernet_key).decrypt(token).decode("utf-8")
+    except InvalidToken:
+        raise ValueError("Incorrect password, or the key file is corrupted.")
+
+
+def setup_api_key(path: Path):
+    """Interactively prompt for a Last.fm API key + password and store it."""
+    tqdm.write("Setting up your Last.fm API key.")
+    tqdm.write(
+        "Don't have one? Create one free at https://www.last.fm/api/account/create"
+    )
+    api_key = getpass.getpass("Last.fm API key (input hidden): ").strip()
+    if not api_key:
+        tqdm.write("No API key entered, aborting.")
+        sys.exit(1)
+
+    while True:
+        password = getpass.getpass("Choose a password to encrypt it with: ")
+        confirm = getpass.getpass("Confirm password: ")
+        if not password:
+            tqdm.write("Password can't be empty, try again.")
+            continue
+        if password != confirm:
+            tqdm.write("Passwords didn't match, try again.")
+            continue
+        break
+
+    save_encrypted_api_key(api_key, password, path)
+    tqdm.write(f"Encrypted API key saved to: {path}")
+    tqdm.write("You'll be asked for this password each time you run the script.")
+
+
+def unlock_api_key(path: Path) -> str:
+    """Prompt for the password and decrypt the stored API key, with retries."""
+    if not path.is_file():
+        tqdm.write(f"No encrypted API key found at: {path}")
+        tqdm.write("Run this first:  python lastfm_genre_tagger.py --set-api-key")
+        sys.exit(1)
+
+    for attempt in range(3):
+        password = getpass.getpass("Password to unlock your Last.fm API key: ")
+        try:
+            return load_encrypted_api_key(password, path)
+        except ValueError as e:
+            tqdm.write(f"[ERROR] {e}")
+            if attempt < 2:
+                tqdm.write("Try again.")
+
+    tqdm.write("Too many failed attempts, exiting.")
+    sys.exit(1)
+
+
+# --------------------------------------------------------------------------
+# Denylist
+# --------------------------------------------------------------------------
 
 def load_denylist(path: Optional[str]):
     """
@@ -462,8 +609,25 @@ def main():
     parser = argparse.ArgumentParser(
         description="Replace GENRE tags on FLAC albums using Last.fm's top tags."
     )
-    parser.add_argument("folder", type=str, help="Folder containing FLAC files (searched recursively)")
-    parser.add_argument("--api-key", type=str, required=True, help="Your Last.fm API key")
+    parser.add_argument(
+        "folder",
+        type=str,
+        nargs="?",
+        default="",
+        help="Folder containing FLAC files, searched recursively (default: current directory)",
+    )
+    parser.add_argument(
+        "--set-api-key",
+        action="store_true",
+        help="Interactively prompt for your Last.fm API key and a password, "
+             "encrypt the key, save it to --key-file, then exit.",
+    )
+    parser.add_argument(
+        "--key-file",
+        type=str,
+        default=str(DEFAULT_KEY_FILE),
+        help=f"Path to the encrypted API key file (default: {DEFAULT_KEY_FILE})",
+    )
     parser.add_argument(
         "--min-weight",
         type=int,
@@ -486,8 +650,8 @@ def main():
     parser.add_argument(
         "--no-prompt",
         action="store_true",
-        help="Never pause for manual input; just skip albums where no tags could be found "
-             "(old behavior). By default the script pauses and asks.",
+        help="Never pause for manual input; just skip albums where no tags could be found. "
+             "By default the script pauses and asks.",
     )
     parser.add_argument(
         "--dry-run",
@@ -497,12 +661,26 @@ def main():
     parser.add_argument(
         "--log-file",
         type=str,
-        default=None,
+        default=DEFAULT_LOG_FILE,
         help="Path to write a list of albums that were skipped (no tags found), with "
-             "a Last.fm search link for each, so large batch runs are easy to review afterward.",
+             f"a Last.fm search link for each (default: {DEFAULT_LOG_FILE}).",
+    )
+    parser.add_argument(
+        "--no-log",
+        action="store_true",
+        help="Don't write a skipped-albums log file, even if some albums were skipped.",
     )
 
     args = parser.parse_args()
+
+    key_path = Path(args.key_file).expanduser()
+
+    if args.set_api_key:
+        setup_api_key(key_path)
+        sys.exit(0)
+
+    api_key = unlock_api_key(key_path)
+
     root = Path(args.folder).expanduser().resolve()
 
     if not root.is_dir():
@@ -534,7 +712,7 @@ def main():
         tqdm.write(f"\n'{artist}' - '{album}'  ({len(files)} track(s))")
 
         tags = resolve_album_tags(
-            api_key=args.api_key,
+            api_key=api_key,
             artist=artist,
             album=album,
             files=files,
@@ -568,7 +746,7 @@ def main():
         for artist, album in skipped_albums:
             tqdm.write(f"  - '{artist}' - '{album}'")
 
-        if args.log_file:
+        if not args.no_log:
             log_path = Path(args.log_file).expanduser()
             try:
                 with log_path.open("w", encoding="utf-8") as f:

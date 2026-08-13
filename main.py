@@ -2,7 +2,6 @@ from soulseek_gather_downloads import move_files_to_root
 from change_to_flac import convert
 from remove_asterixs_from_lyrics import remove_asterixs_from_lyrics
 from fix_tags import fix_tags
-from artist_image import get_artist_image
 from translate_lyrics import translate_lyrics
 from final_check import confirm_and_move
 from tag_normaliser import normalise

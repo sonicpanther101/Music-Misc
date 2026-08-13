@@ -40,4 +40,4 @@ def move_files_to_root(directory, new_directory):
     cleanup(directory)
 
 if __name__ == "__main__":
-    move_files_to_root("C:/Users/Adam/Documents/Soulseek Downloads/complete", "D:/Music/New unformated songs")
+    move_files_to_root("/home/adam/driveBig/Music/New unformated songs", "/home/adam/driveBig/Music/New unformated songs")

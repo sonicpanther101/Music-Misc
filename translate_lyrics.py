@@ -300,4 +300,4 @@ def translate_lyrics(directory):
                 print(f"Error applying lyrics: {e}")
 
 if __name__ == "__main__":
-    translate_lyrics("/home/adam/driveBig/Music/My Playlist")
+    translate_lyrics("/home/adam/driveBig/Music/New unformated songs")
