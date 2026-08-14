@@ -35,7 +35,7 @@
 - All songs should be at 16 bit 44.1kHz and no less unless no better version is available (should be checked thoroughly) (downsize music.py)
 
 ### TODO:
-- [ ] LastFM Tag scraper for capitalisation of songs
+- [x] LastFM Tag scraper for capitalisation of songs
 
 ## IPod adding and removing songs
 

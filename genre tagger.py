@@ -162,6 +162,8 @@ DEFAULT_DENYLIST = {
     "unknown",
     "none",
     "n/a",
+    "wsum 91.7 fm madison",
+    "to get",
 }
 
 
