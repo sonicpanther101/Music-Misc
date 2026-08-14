@@ -12,6 +12,7 @@
 - Album version is only to be mentioned in album tag and no other
 - If there is a special version of a song on an album, then it can be mentioned in the title (live or remixed for example)
 - File title is to be `title - artist` and if it isn't a single, ` - album`. The tagscanner code for this is: `%title% - %artist%$if($equal(%title%,%album%),, - %album%)`
+- Use: `%albumartist% - %album% - %track% %title%` for IPod songs
 - All in `New unformated songs` folder for proceeding steps
 ##### Lyrics
 - Lyrics on the `LYRICS` tag for phone app (might struggle on foobar openlyrics)
