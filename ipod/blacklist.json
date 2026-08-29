@@ -1,0 +1,73 @@
+{
+  "not_downloaded": [],
+  "overplayed": [
+    "c418::minecraft - volume beta",
+    "c418::minecraft - volume alpha",
+    "various artists::rain world: downpour: original soundtrack",
+    "various artists::cyberpunk 2077 - original score"
+  ],
+  "recently_played": [
+    {
+      "added": 1787974612.7582161,
+      "key": "damiano david::funny little fears"
+    },
+    {
+      "added": 1787974639.3748987,
+      "key": "feeder::comfort in sound"
+    },
+    {
+      "added": 1787974702.4614801,
+      "key": "pearl jam::ten"
+    },
+    {
+      "added": 1787974737.688696,
+      "key": "the kinks::kinks"
+    },
+    {
+      "added": 1787974743.4365838,
+      "key": "paramore::riot!"
+    },
+    {
+      "added": 1787974776.3711045,
+      "key": "cage the elephant::neon pill"
+    },
+    {
+      "added": 1787974795.287896,
+      "key": "soundgarden::superunknown (deluxe edition)"
+    },
+    {
+      "added": 1787974815.4370677,
+      "key": "boywithuke::fever dreams"
+    },
+    {
+      "added": 1787974817.3750982,
+      "key": "demob happy::dream soda"
+    }
+  ],
+  "vinyl": [
+    "chandol::mercurial",
+    "kings of leon::can we please have fun",
+    "of monsters and men::all is love and pain in the mouse parade",
+    "the monkees::monkeemania",
+    "nirvana::in utero",
+    "twenty one pilots::vessel",
+    "foo fighters::there is nothing left to lose",
+    "alt-j::an awesome wave",
+    "m\u00e5neskin::rush!",
+    "dire straits::communiqu\u00e9",
+    "bully::lucky for you",
+    "rage against the machine::the battle of los angeles",
+    "pixies::doolittle",
+    "the kinks::20 golden greats",
+    "red hot chili peppers::californication",
+    "arctic monkeys::am",
+    "a-ha::hunting high and low",
+    "zz top::eliminator",
+    "dire straits::brothers in arms",
+    "green day::dookie",
+    "roy orbison::the very best of",
+    "electric light orchestra::out of the blue",
+    "queen::greatest hits",
+    "alt-j::relaxer"
+  ]
+}
