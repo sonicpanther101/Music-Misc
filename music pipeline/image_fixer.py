@@ -10,6 +10,9 @@ FLAC file in the target folder:
         1. Front cover   (type 3) - identical across every track of an album
         2. Artist image  (type 8) - identical across every track by an artist
   * The front cover is >= MIN_RESOLUTIONxMIN_RESOLUTION and <= MAX_SIZE_BYTES.
+  * Every embedded picture is JPEG or PNG - anything else (WEBP, GIF, BMP,
+    TIFF, etc.) is transparently converted to whichever of the two suits it
+    best (PNG if it has transparency, JPEG otherwise).
   * Any other embedded picture types (back cover, leaflet, etc.) are dropped.
 
 Pipeline:
@@ -20,6 +23,10 @@ Pipeline:
   3. For each artist: find an existing artist image, or search Last.fm.
   4. Write the final [front cover, artist image] pair into every track,
      skipping files that already have exactly that pair.
+
+  Every image entering the pipeline (existing embedded pictures, and images
+  downloaded from Last.fm) is normalized to JPEG or PNG before it's used for
+  quality checks, previews, or writing.
 
 Requires: mutagen, Pillow, matplotlib, beautifulsoup4, curl_cffi, tqdm, ffmpeg.
 """
@@ -62,6 +69,9 @@ MIN_DELAY, MAX_DELAY = 1.5, 3.5       # polite delay between artists/albums
 IMAGE_PAGE_DELAY = (0.6, 1.4)         # delay before each detail-page fetch
 MAX_RETRIES = 3
 MAX_IMAGES_TO_OFFER = 12              # cap on gallery photos we'll browse
+
+# Formats we're allowed to embed as-is. Anything else gets converted.
+ALLOWED_FORMATS = {"JPEG", "PNG"}
 
 FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
 
@@ -124,6 +134,68 @@ def close_preview():
     if _fig is not None:
         plt.close(_fig)
         _fig = None
+
+
+# ============================================================================
+# IMAGE FORMAT NORMALIZATION
+# ============================================================================
+
+def get_mime_type(image_data):
+    """Best-effort MIME type of already-normalized image bytes (JPEG/PNG)."""
+    try:
+        img = Image.open(BytesIO(image_data))
+        fmt = (img.format or "").upper()
+    except Exception:
+        fmt = ""
+    return "image/png" if fmt == "PNG" else "image/jpeg"
+
+
+def convert_to_best_format(image_data, label=None):
+    """Ensure image bytes are JPEG or PNG.
+
+    If the image is already JPEG or PNG, it's returned unchanged. Otherwise
+    (WEBP, GIF, BMP, TIFF, HEIC, etc.) it's converted to whichever of the two
+    suits it best: PNG if it has an alpha/transparency channel, JPEG
+    otherwise (smaller, and the right choice for plain photos/cover art).
+
+    Returns (image_bytes, mime_type). On decode failure, returns the input
+    unchanged with a best-guess JPEG mime so callers can still proceed.
+    """
+    try:
+        img = Image.open(BytesIO(image_data))
+        fmt = (img.format or "").upper()
+    except Exception as e:
+        print(f"   ⚠ Could not inspect image format{f' for {label}' if label else ''}: {e}")
+        return image_data, "image/jpeg"
+
+    if fmt in ALLOWED_FORMATS:
+        return image_data, ("image/png" if fmt == "PNG" else "image/jpeg")
+
+    has_alpha = (
+        img.mode in ("RGBA", "LA", "PA")
+        or (img.mode == "P" and "transparency" in img.info)
+    )
+
+    buf = BytesIO()
+    try:
+        if has_alpha:
+            img.convert("RGBA").save(buf, format="PNG", optimize=True)
+            mime = "image/png"
+            out_fmt = "PNG"
+        else:
+            img.convert("RGB").save(buf, format="JPEG", quality=95)
+            mime = "image/jpeg"
+            out_fmt = "JPEG"
+    except Exception as e:
+        print(f"   ⚠ Could not convert image{f' for {label}' if label else ''} "
+              f"from {fmt or 'unknown format'}: {e}")
+        return image_data, "image/jpeg"
+
+    converted = buf.getvalue()
+    print(f"   Converted{f' {label}' if label else ''} image from "
+          f"{fmt or 'unknown format'} to {out_fmt} "
+          f"({len(image_data) / 1024:.1f}KB -> {len(converted) / 1024:.1f}KB)")
+    return converted, mime
 
 
 # ============================================================================
@@ -386,7 +458,9 @@ def resolve_image_url(page_url, cache):
 
 
 def download_image(url):
-    """Download image bytes, trying common URL variants if the exact URL 404s."""
+    """Download image bytes, trying common URL variants if the exact URL 404s.
+    Whatever format comes back (Last.fm mostly serves JPEG, but PNG/WEBP do
+    show up) is normalized to JPEG or PNG before being returned."""
     candidates = [url]
     if not re.search(r"\.(jpg|jpeg|png)$", url, re.IGNORECASE):
         candidates.append(url + ".jpg")
@@ -399,7 +473,8 @@ def download_image(url):
     for candidate in candidates:
         try:
             r = get_with_retries(candidate, timeout=10)
-            return r.content
+            converted, _mime = convert_to_best_format(r.content, label="downloaded")
+            return converted
         except Exception as e:
             last_exc = e
             continue
@@ -468,8 +543,9 @@ def interactive_lastfm_picker(artist, album, label):
 # ============================================================================
 
 def best_existing_front_cover(files):
-    """Highest-resolution type-3 picture found across a set of FLAC files."""
-    best_pic, best_score = None, -1
+    """Highest-resolution type-3 picture data found across a set of FLAC
+    files, normalized to JPEG/PNG."""
+    best_data, best_score = None, -1
     for path in files:
         try:
             audio = FLAC(path)
@@ -480,12 +556,18 @@ def best_existing_front_cover(files):
             if pic.type == 3:
                 score = pic.width * pic.height
                 if score > best_score:
-                    best_pic, best_score = pic, score
-    return best_pic
+                    best_data, best_score = pic.data, score
+
+    if best_data is None:
+        return None
+
+    converted, _mime = convert_to_best_format(best_data, label="existing front cover")
+    return converted
 
 
 def existing_artist_image(files):
-    """First type-8 picture data found across a set of FLAC files."""
+    """First type-8 picture data found across a set of FLAC files,
+    normalized to JPEG/PNG."""
     for path in files:
         try:
             audio = FLAC(path)
@@ -493,14 +575,15 @@ def existing_artist_image(files):
             continue
         for pic in audio.pictures:
             if pic.type == 8:
-                return pic.data
+                converted, _mime = convert_to_best_format(pic.data, label="existing artist image")
+                return converted
     return None
 
 
-def make_picture(image_data, pic_type, mime="image/jpeg"):
+def make_picture(image_data, pic_type, mime=None):
     pic = Picture()
     pic.type = pic_type
-    pic.mime = mime
+    pic.mime = mime or get_mime_type(image_data)
     pic.data = image_data
     return pic
 
@@ -529,14 +612,15 @@ def current_pair_matches(path, front_bytes, artist_bytes):
 
 def write_front_and_artist(path, front_bytes, artist_bytes):
     """Overwrite a file's pictures with exactly [front(type3), artist(type8)],
-    dropping every other embedded picture type."""
+    dropping every other embedded picture type. Mime type is derived from
+    the actual (already-normalized JPEG/PNG) bytes being written."""
     try:
         audio = FLAC(path)
         audio.clear_pictures()
         if front_bytes:
-            audio.add_picture(make_picture(front_bytes, 3))
+            audio.add_picture(make_picture(front_bytes, 3, get_mime_type(front_bytes)))
         if artist_bytes:
-            audio.add_picture(make_picture(artist_bytes, 8))
+            audio.add_picture(make_picture(artist_bytes, 8, get_mime_type(artist_bytes)))
         audio.save()
         return True
     except Exception as e:
@@ -551,8 +635,7 @@ def write_front_and_artist(path, front_bytes, artist_bytes):
 def resolve_album_cover(album_name, artist_name, files):
     """Return validated front-cover bytes for an album, or None if none
     could be obtained (existing cover kept as-is / album left without one)."""
-    best_pic = best_existing_front_cover(files)
-    candidate = best_pic.data if best_pic else None
+    candidate = best_existing_front_cover(files)
 
     if candidate:
         is_valid, w, h, size, issue = check_image_quality(candidate)
