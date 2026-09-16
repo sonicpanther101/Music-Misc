@@ -20,7 +20,7 @@ def normalize(s):
 def sanitize_filename(filename):
     """Remove or replace characters that are invalid in Windows filenames."""
     replacements = {
-        ':': ' -', '/': '-', '\\': '-', '|': '-', '?': '',
+        ':': '-', '/': '-', '\\': '-', '|': '-', '?': '',
         '*': '', '"': "'", '<': '', '>': ''
     }
     for old, new in replacements.items():
@@ -36,7 +36,7 @@ def confirm_and_move(directory, new_directory):
     same_dir = os.path.abspath(directory) == os.path.abspath(new_directory)
     flacs = get_flacs(directory)
     required_tags = [
-        "artist", "title", "album", "date", "lyrics",
+        "artist", "title", "album", "date",
         "albumartist", "replaygain_album_gain", "replaygain_album_peak",
         "replaygain_track_gain", "replaygain_track_peak"
     ]
@@ -76,14 +76,26 @@ def confirm_and_move(directory, new_directory):
 
         # --- Filename format check ---
         filename = os.path.basename(flac)
-        expected_filename = f"{audio_file['title'][0]} - {audio_file['artist'][0]}{' - ' + audio_file['album'][0] if audio_file['album'] != audio_file['title'] else ''}.flac"
-        expected_filename = sanitize_filename(expected_filename)
-
-        if normalize(filename) != normalize(expected_filename):
+        
+        # Construct expected filename using the same method as fix_tags.py
+        expected_name = f"{audio_file['title'][0]} - {audio_file['artist'][0]}"
+        if audio_file['album'][0] != audio_file['title'][0]:
+            expected_name += f" - {audio_file['album'][0]}"
+        expected_name += ".flac"
+        expected_name = sanitize_filename(expected_name)
+        
+        # Normalize both filenames for comparison (using same logic as fix_tags)
+        current_normalized = normalize(filename)
+        expected_normalized = normalize(expected_name)
+        
+        if current_normalized != expected_normalized:
             print(f"Invalid filename format for {os.path.basename(flac)}.")
-            for i, (a, b) in enumerate(zip(filename, expected_filename)):
-                if a != b:
-                    print(f"Difference at position {i}: '{a}' vs '{b}'")
+            # Show actual vs expected for debugging but only ask to skip if it's truly different
+            print(f"Current:  {filename}")
+            print(f"Expected: {expected_name}")
+            
+            # For cases where the difference is just spacing/normalization (but not content),
+            # we might want to consider this as a case difference or apply normalization for better matching
             if not ask_skip("Filename format differs."):
                 print("Skipping file.")
                 continue
@@ -94,6 +106,26 @@ def confirm_and_move(directory, new_directory):
             if not ask_skip(msg):
                 print("Skipping file.")
                 continue
+
+        # --- Check if song is instrumental ---
+        is_instrumental = False
+        # Check for instrumental tag (common in music tagging standards)
+        if 'instrumental' in audio_file:
+            # The instrumental tag should have a value of 1 for instrumental tracks
+            if audio_file['instrumental'][0] == '1':
+                is_instrumental = True
+
+        # --- Lyrics check (skip if instrumental) ---
+        if not is_instrumental:
+            # Only require lyrics for non-instrumental tracks
+            if 'lyrics' not in audio_file or not audio_file['lyrics']:
+                print(f"Missing lyrics for {os.path.basename(flac)}.")
+                if ask_skip("This track has no lyrics."):
+                    continue
+                print("Skipping file.")
+                continue
+        else:
+            print(f"Skipping lyrics check - track is tagged as instrumental.")
 
         # --- Duplicate in destination ---
         # When source == destination, "the file already exists there" is
@@ -106,20 +138,23 @@ def confirm_and_move(directory, new_directory):
                 print("Skipping file.")
                 continue
 
-        # --- Final confirmation ---
+        # --- File passes all checks ---
+        # Only prompt for confirmation if we need to make a decision
         if same_dir:
             print(f"\n✅ File {filename} is fully tagged and already in your music folder.")
+            print("No action needed - file is ready.")
         else:
             print(f"\n✅ File {filename} is ready to be moved to the new directory.")
-        for tag in required_tags:
-            print(f"{tag}: {audio_file[tag][0]}")
-        print(f"Filename: {filename}")
-
-        confirm_prompt = "Mark this file as done? (y/n): " if same_dir else "Move this file? (y/n): "
-        confirm = input(confirm_prompt).strip().lower()
-        if confirm != "y":
-            print("Skipping file.")
-            continue
+            for tag in required_tags:
+                print(f"{tag}: {audio_file[tag][0]}")
+            print(f"Filename: {filename}")
+            
+            # Only prompt when moving files (not when already in same directory)
+            confirm_prompt = "Move this file? (y/n): "
+            confirm = input(confirm_prompt).strip().lower()
+            if confirm != "y":
+                print("Skipping file.")
+                continue
 
         # --- Move file (skipped entirely when source == destination) ---
         if same_dir:

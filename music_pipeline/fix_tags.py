@@ -84,7 +84,10 @@ def fix_tags(directory, store=None):
     total = len(flacs)
     
     for idx, flac in enumerate(flacs, 1):
-        print(f"\n[{idx}/{total}] 🎧 Checking: {flac}")
+        # Show more detailed progress 
+        percent = (idx / total) * 100 if total > 0 else 0
+        basename = os.path.basename(flac)
+        print(f"\n[{idx}/{total}] ({percent:.1f}%) 🎧 Checking: {basename}")
         audio_file = FLAC(flac)
         updated = False
 

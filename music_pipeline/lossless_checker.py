@@ -220,7 +220,7 @@ def main():
                     # worker process itself died (e.g. segfault in a C decoder) - don't lose the file
                     res = {"path": path, "verdict": "ERROR", "detail": f"worker crashed: {e}"}
                 results.append(res)
-                print(f"[{i}/{len(todo)}] {res['verdict']:16s} {os.path.basename(res['path'])}")
+                print(f"[{i}/{len(todo)}] ({(i/len(todo)*100):.1f}%) {res['verdict']:16s} {os.path.basename(res['path'])}")
                 if writer:
                     writer.writerow(res)
                     csv_file.flush()

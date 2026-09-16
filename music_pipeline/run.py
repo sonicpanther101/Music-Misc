@@ -243,6 +243,11 @@ def run_setup(cfg):
 
 
 def stage(title):
+    # Emit a special progress indicator to TUI for overall tracking
+    # This is used by the TUI when running as subprocess 
+    if hasattr(sys, 'argv') and '--auto' in sys.argv:
+        print(f"[[PIPELINE_PROGRESS]] {title}")
+    
     print("\n" + "=" * 70)
     print(title)
     print("=" * 70)

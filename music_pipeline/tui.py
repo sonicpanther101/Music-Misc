@@ -45,7 +45,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import (
     Button, Checkbox, DataTable, Footer, Header, Input, Label, RichLog, Static,
-    TextArea,
+    TextArea, ProgressBar,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -209,6 +209,7 @@ class RunScreen(Screen):
         text_view.display = False
         yield text_view
         yield Static("", id="log-status")
+        yield ProgressBar(id="pipeline-progress", show_eta=False)
         with Horizontal(id="run-input-row"):
             yield Input(placeholder="Type a reply and press Enter (for y/n or missing-tag prompts)...",
                         id="stdin-box", disabled=True)
@@ -245,6 +246,13 @@ class RunScreen(Screen):
 
     def _emit(self, raw: str) -> None:
         """Write one line to the colour log and the plain-text mirror."""
+        # Check if this is a pipeline progress indicator
+        if raw.strip().startswith("[[PIPELINE_PROGRESS]]"):
+            # Extract stage title for progress tracking
+            stage_title = raw.strip()[23:].strip()  # Remove "[[PIPELINE_PROGRESS]] "
+            self._update_progress(stage_title)
+            return
+            
         self.lines.append(ANSI_RE.sub("", raw))
         try:
             log = self.query_one("#log", RichLog)
@@ -256,6 +264,26 @@ class RunScreen(Screen):
             log.write(Text.from_ansi(raw))
         except Exception:
             log.write(ANSI_RE.sub("", raw))
+
+    def _update_progress(self, stage_title: str) -> None:
+        """Update the visual pipeline progress bar based on stage title."""
+        try:
+            progress_bar = self.query_one("#pipeline-progress", ProgressBar)
+            
+            # Simple mapping for now - just show that we are progressing
+            # In a more advanced implementation, this could be more sophisticated
+            if "1/4" in stage_title:
+                progress_bar.progress = 25
+            elif "2/4" in stage_title:
+                progress_bar.progress = 50
+            elif "3/4" in stage_title:
+                progress_bar.progress = 75
+            elif "4/4" in stage_title:
+                progress_bar.progress = 100
+                
+        except Exception:
+            # If no progress bar or other issues, silently continue
+            pass
 
     def log_text(self) -> str:
         return "\n".join(self.lines)

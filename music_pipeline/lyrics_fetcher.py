@@ -322,7 +322,9 @@ def process_folder(folder, overwrite=False, sleep=0.3):
     needs_attention = []  # (path, status, message)
 
     for i, p in enumerate(flacs, 1):
-        print(f"[{i}/{len(flacs)}] {p.name} ... ", end="", flush=True)
+        # Show more detailed progress 
+        percent = (i / len(flacs)) * 100 if len(flacs) > 0 else 0
+        print(f"[{i}/{len(flacs)}] ({percent:.1f}%) {p.name} ... ", end="", flush=True)
         try:
             status, msg = apply_lyrics_to_file(p, overwrite=overwrite, sleep=sleep)
         except Exception as e:
