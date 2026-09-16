@@ -231,3 +231,93 @@ The read loop now pulls raw chunks instead, emits complete lines
 immediately, and flushes whatever partial line is left over once the
 pipeline goes quiet for ~150ms - which is exactly when it's sitting
 there waiting for you. Questions now appear when they're asked.
+
+## 9. Lyrics-fetch crash: NetEase returning a bare string instead of JSON
+
+    error ('str' object has no attribute 'get')
+    Lyrics fetch summary:
+      ...
+      error: 14
+
+NetEase's unofficial API sometimes answers a blocked or rate-limited
+request with a bare JSON string (e.g. `"-460"`) instead of the
+`{"result": {"songs": [...]}}` shape the code expected. `r.json()`
+parses that fine - it's valid JSON - so no exception was raised there;
+the crash came one line later, calling `.get()` on what turned out to be
+a `str`. Every file whose NetEase lookup got one of these responses
+counted as a hard "error" for the whole file, even when LRCLIB might
+already have answered, or NetEase's answer for that specific file just
+happened to be malformed while the file itself was perfectly fine.
+
+Fixed in `lyrics_fetcher.py`:
+
+- `netease_search()`, `netease_lyric()`, and the LRCLIB equivalents now
+  check `isinstance(..., dict)` (or `list`, for LRCLIB's search
+  endpoint) at every step before calling `.get()` on anything a server
+  sent back. An unexpected shape is now treated as "no results", not a
+  crash.
+- LRCLIB and NetEase are now tried independently: an exception in one no
+  longer skips the other. Only if *neither* produces anything does the
+  file get reported as an error, and the message says which source(s)
+  failed and why (`"LRCLIB: <reason>; NetEase: <reason>"`) instead of a
+  bare, out-of-context Python exception.
+
+## 10. Translate: no more debug spam, and translated songs stay translated
+
+Two things here: `translate_lyrics.py` had a debug print literally
+labelled `# <-- temporary debug line` that was never removed, and there
+was no durable way to tell "this song has already been through
+translation" from "this song has never been looked at" - so a song
+stayed flagged, and got re-shown the same debug output, on every single
+run, forever.
+
+- **Debug spam gone.** The `[non-ascii after normalize]` / `[flagged]`
+  prints only show now with `MUSIC_PIPELINE_DEBUG_TRANSLATE=1` set -
+  still available for troubleshooting, off by default.
+
+- **"Already translated" is now a real, permanent fact about the file,
+  not a guess re-computed every run.** Two new tags:
+
+      lyrics_translated             "1" once a translation was applied
+      lyrics_translate_declined_hash   hash of the text you said [n]o to
+
+  These live *on the FLAC file itself* rather than in an external cache
+  keyed by path, deliberately - `fix_tags.py` renames and moves these
+  files constantly, and a path-keyed cache would silently stop matching
+  the moment a file's name gets corrected. Tags travel with the file.
+
+  Checked in order, before any of the (printy) "does this need
+  translating" analysis even runs:
+    1. `lyrics_translated == "1"` -> skip immediately, silently.
+    2. the declined-hash matches the *current* lyrics text -> skip, and
+       say so. If the lyrics later change (a better sync comes in, you
+       hand-edit them), the hash won't match and you're asked again -
+       about the new text, which is correct, not a bug to route around.
+    3. the existing ratio-based `already_translated()` heuristic is kept
+       as a second check (catches translations applied by an older copy
+       of this script, before these tags existed) - and now *backfills*
+       `lyrics_translated` when it fires, so that's a one-time cost per
+       file rather than a heuristic re-run forever.
+
+- **Recursive folder walk.** `translate_lyrics()` used `os.listdir()`,
+  not `os.walk()`/`rglob()` like every other stage - a library organised
+  as Artist/Album subfolders was silently never processed by this stage
+  at all if pointed at the library root. Now walks recursively, matching
+  `lyrics_fetcher.py` and `lyrics_checker.py`.
+
+- **`input()` calls fail safe.** None of this script's prompts handled
+  `EOFError` - in a genuinely unattended context (stdin already closed)
+  the very first prompt would crash the script outright, mid-library,
+  with no per-file cleanup. All prompts now go through a small `ask()`
+  helper that treats EOF as "no"/"quit" instead of crashing.
+
+- **A write-time safety net.** A translation pass only ever *appends*
+  lines - the original line is always kept, with a translated line added
+  after it - so the result can never legitimately end up shorter than
+  what you started with. If it somehow did, the file is now left alone
+  and a `[SAFETY]` message is printed, rather than saving something with
+  less content than it had before. This won't silently mask a bug, but
+  it does turn "lyrics quietly vanished, discovered days later" into
+  "the pipeline told you exactly which file it refused to touch, and
+  why" - a state you can find and act on immediately, whatever bug (in
+  this codebase or otherwise) actually causes it in a given run.

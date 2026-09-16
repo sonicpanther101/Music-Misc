@@ -18,6 +18,13 @@ Order of attempts, per track:
   4. If nothing at all was found, the file is reported as needing lyrics
      entirely.
 
+A failure in one source (a network hiccup, or an unofficial API like
+NetEase's answering with something other than the JSON shape we expect)
+does not cost you the other source: each is tried independently, and only
+shows up as "error" in the summary if BOTH failed AND nothing was found
+either way - at which point the message says which source(s) failed and
+why, rather than a bare Python exception with no context.
+
 Writes into the vorbis-comment fields foo_openlyrics reads:
   - lyrics: the LRC text (or blank, for instrumentals)
   - instrumental: "1" for tracks with no vocals
@@ -77,8 +84,9 @@ def lrclib_get(title, artist, album, duration):
         r = requests.get(f"{LRCLIB_BASE}/get", params=params,
                           headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
         if r.status_code == 200:
-            return r.json()
-    except requests.RequestException:
+            data = r.json()
+            return data if isinstance(data, dict) else None
+    except (requests.RequestException, ValueError):
         pass
     return None
 
@@ -93,6 +101,9 @@ def lrclib_search(title, artist, duration):
         results = r.json()
     except (requests.RequestException, ValueError):
         return None
+    if not isinstance(results, list) or not results:
+        return None
+    results = [x for x in results if isinstance(x, dict)]
     if not results:
         return None
     if duration:
@@ -124,14 +135,34 @@ def netease_search(title, artist):
             headers=_netease_headers(), timeout=REQUEST_TIMEOUT,
         )
         data = r.json()
-        songs = data.get("result", {}).get("songs", [])
     except (requests.RequestException, ValueError):
         return None
+
+    # NetEase's unofficial endpoints sometimes answer a blocked/rate-limited
+    # request with a bare JSON string (e.g. "-460") instead of the usual
+    # {"result": {...}} object. That's still valid JSON, so r.json()
+    # doesn't raise - but calling .get() on the result then blows up with
+    # "'str' object has no attribute 'get'". Treat anything that isn't the
+    # shape we expect as "no results" instead of crashing the file.
+    if not isinstance(data, dict):
+        return None
+    result = data.get("result")
+    if not isinstance(result, dict):
+        return None
+    songs = result.get("songs", [])
+    if not isinstance(songs, list):
+        return None
+    songs = [s for s in songs if isinstance(s, dict)]
     if not songs:
         return None
 
     def score(song):
-        song_artists = " ".join(a.get("name", "") for a in song.get("artists", [])).casefold()
+        artists = song.get("artists", [])
+        if not isinstance(artists, list):
+            artists = []
+        song_artists = " ".join(
+            a.get("name", "") for a in artists if isinstance(a, dict)
+        ).casefold()
         s = 0
         if artist.casefold() in song_artists or song_artists in artist.casefold():
             s += 2
@@ -150,9 +181,10 @@ def netease_lyric(song_id):
             params={"id": song_id, "lv": 1, "kv": 1, "tv": -1},
             headers=_netease_headers(), timeout=REQUEST_TIMEOUT,
         )
-        return r.json()
+        data = r.json()
     except (requests.RequestException, ValueError):
         return None
+    return data if isinstance(data, dict) else None
 
 
 def netease_lookup(title, artist):
@@ -164,7 +196,7 @@ def netease_lookup(title, artist):
         return None
     if data.get("nolyric"):
         return {"instrumental": True, "syncedLyrics": None, "plainLyrics": None}
-    lrc = (data.get("lrc") or {}).get("lyric")
+    lrc = (data.get("lrc") or {}).get("lyric") if isinstance(data.get("lrc"), dict) else None
     if lrc and looks_instrumental(lrc):
         return {"instrumental": True, "syncedLyrics": None, "plainLyrics": None}
     if lrc and is_synced(lrc):
@@ -211,9 +243,14 @@ def apply_lyrics_to_file(path, overwrite=False, sleep=0.0):
         pass
 
     plain_fallback = None
+    source_errors = []
 
     # 1. LRCLIB
-    result = lrclib_lookup(title, artist, album, duration)
+    try:
+        result = lrclib_lookup(title, artist, album, duration)
+    except Exception as e:
+        result = None
+        source_errors.append(f"LRCLIB: {e}")
     if result:
         if result.get("instrumental"):
             _write_instrumental(audio)
@@ -227,8 +264,16 @@ def apply_lyrics_to_file(path, overwrite=False, sleep=0.0):
     if sleep:
         time.sleep(sleep)
 
-    # 2. NetEase
-    ne = netease_lookup(title, artist)
+    # 2. NetEase - a failure here (or above) is reported as part of the
+    # eventual "not_found" reason rather than aborting the file outright,
+    # so a single flaky API doesn't cost you a source you didn't even need
+    # (LRCLIB may already have answered) or silently skip a file with no
+    # lyrics written and no clear explanation why.
+    try:
+        ne = netease_lookup(title, artist)
+    except Exception as e:
+        ne = None
+        source_errors.append(f"NetEase: {e}")
     if ne:
         if ne.get("instrumental"):
             _write_instrumental(audio)
@@ -246,6 +291,8 @@ def apply_lyrics_to_file(path, overwrite=False, sleep=0.0):
         _write_lyrics(audio, text)
         return "unsynced_plain", f"only unsynced lyrics found ({source}) - needs manual timing"
 
+    if source_errors:
+        return "error", "; ".join(source_errors)
     return "not_found", "no lyrics found anywhere"
 
 

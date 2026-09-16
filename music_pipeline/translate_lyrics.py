@@ -1,8 +1,10 @@
 import mutagen
 from mutagen.flac import FLAC
+import hashlib
 import os
 import readline
 import re
+from pathlib import Path
 from deep_translator import GoogleTranslator  # Add Google Translate import
 import time  # For rate limiting
 from langdetect import detect, LangDetectException
@@ -13,6 +15,50 @@ from change_display import auto_applied_note, format_change, is_case_only
 
 # Set seed once at module level for deterministic results
 DetectorFactory.seed = 0
+
+# --------------------------------------------------------------------------
+# "Don't ask about this song again" tracking
+#
+# These live as tags ON THE FILE ITSELF rather than in an external cache
+# keyed by path, because fix_tags.py routinely renames and moves these
+# files - a path-keyed cache would silently stop matching the moment a
+# file gets its filename corrected. Tags travel with the file.
+#
+#   TRANSLATED_TAG   - "1" once a translation pass has actually been
+#                       applied. Checked first, before any of the
+#                       (fairly expensive, printy) "does this need
+#                       translating" analysis runs at all.
+#   SKIP_HASH_TAG    - the hash of the lyrics text you said [n]o to
+#                       translating. Checked next: if the lyrics haven't
+#                       changed since you declined, you're not asked
+#                       again about the same text. If the lyrics DO
+#                       change later (a better sync gets fetched, you
+#                       edit them by hand), the hash changes and you're
+#                       asked again about the new version - which is the
+#                       right behaviour, not a bug to route around.
+# --------------------------------------------------------------------------
+TRANSLATED_TAG = "lyrics_translated"
+SKIP_HASH_TAG = "lyrics_translate_declined_hash"
+
+
+def _lyrics_hash(lyrics: str) -> str:
+    return hashlib.sha1(lyrics.encode("utf-8", errors="replace")).hexdigest()
+
+
+def ask(prompt: str, default: str = "n") -> str:
+    """
+    input() that fails safe. An unattended run (piped stdin, closed
+    terminal) hits EOF the instant it reaches a prompt - Python's input()
+    raises EOFError for that, which would otherwise crash the whole
+    library partway through instead of just skipping the one question it
+    couldn't ask.
+    """
+    try:
+        return input(prompt)
+    except EOFError:
+        print(f"{default!r} (no input available)")
+        return default
+
 
 def get_unsynced_lyrics(file_path: str) -> str:
     try:
@@ -102,11 +148,12 @@ def line_needs_translation(text: str) -> bool:
         return False
 
     normalized = normalize_punctuation(text)
-    
+
     non_ascii = re.findall(r'[^\x00-\x7F]', normalized)
-    if non_ascii:
-        print(f"  [non-ascii after normalize] {[(c, hex(ord(c))) for c in non_ascii]}")
-    
+    if non_ascii and os.environ.get("MUSIC_PIPELINE_DEBUG_TRANSLATE"):
+        print(f"  [debug] non-ascii after normalize: "
+              f"{[(c, hex(ord(c))) for c in non_ascii]}")
+
     return bool(non_ascii)
 
 
@@ -141,7 +188,8 @@ def needs_translation(lyrics: str) -> bool:
             continue
 
         if line_needs_translation(text):
-            print(f"  [flagged] '{text}'")  # <-- temporary debug line
+            if os.environ.get("MUSIC_PIPELINE_DEBUG_TRANSLATE"):
+                print(f"  [debug] flagged: '{text}'")
             return True
 
     return False
@@ -194,26 +242,56 @@ def is_metadata_line(text: str, timestamp_seconds: float = None) -> bool:
 def translate_lyrics(directory):
     translator = GoogleTranslator(source='auto', target='en')
 
-    files = os.listdir(directory)
+    # Recursive, matching how lyrics_fetcher.py and lyrics_checker.py walk
+    # the library - a flat os.listdir() here meant a library organised as
+    # Artist/Album subfolders was silently never touched by this stage.
+    file_paths = sorted(str(p) for p in Path(directory).rglob("*.flac"))
 
-    file_paths = []
-    for file in files:
-        if file.endswith(".flac"):
-            file_paths.append(file)
+    for i, file_path in enumerate(file_paths, 1):
+        print(f"{i}. {os.path.basename(file_path)}")
+        time.sleep(2) # Added delay to respect API rate limits
 
-    for i, file in enumerate(file_paths, 1):
-        print(f"{i}. {file}")
+        try:
+            audio = FLAC(file_path)
+        except mutagen.MutagenError as e:
+            print(f"  Error opening file: {e}")
+            continue
 
-        file_path = os.path.join(directory, file)
-        lyrics = get_unsynced_lyrics(file_path)
+        lyrics = audio.get("lyrics", [""])[0]
         lyrics = sort_by_time(lyrics)
+
+        if not lyrics:
+            print("  No lyrics tag, nothing to translate.")
+            continue
+
+        # Already translated in an earlier run - don't even run the
+        # (printy) analysis, just move on.
+        if audio.get(TRANSLATED_TAG, [""])[0] == "1":
+            print("Already translated, skipping.")
+            continue
+
+        current_hash = _lyrics_hash(lyrics)
+        if audio.get(SKIP_HASH_TAG, [""])[0] == current_hash:
+            print("You said no to translating this exact text before, skipping. "
+                  "(It'll ask again if the lyrics themselves change.)")
+            continue
 
         if not needs_translation(lyrics):
             print("No translation needed.")
             continue
 
         if already_translated(lyrics):
+            # The heuristic caught a translation this file's own tag
+            # didn't know about yet (e.g. one applied by an older version
+            # of this script, before TRANSLATED_TAG existed). Backfill the
+            # tag now so every future run is instant instead of repeating
+            # this same ratio check.
             print("Already translated, skipping.")
+            try:
+                audio[TRANSLATED_TAG] = ["1"]
+                audio.save()
+            except mutagen.MutagenError as e:
+                print(f"  (couldn't backfill the translated marker: {e})")
             continue
 
         # Print lyrics with non-English lines highlighted in yellow
@@ -227,7 +305,15 @@ def translate_lyrics(directory):
             else:
                 print(raw_line)
 
-        if input("Translate? y/n: ").lower() != "y":
+        if ask("Translate? y/n: ").lower() != "y":
+            # Remember the "no" against this exact text, so re-running
+            # the pipeline over the same library doesn't ask again every
+            # single time - only when the lyrics actually change.
+            try:
+                audio[SKIP_HASH_TAG] = [current_hash]
+                audio.save()
+            except mutagen.MutagenError as e:
+                print(f"  (couldn't save your answer, will ask again next time: {e})")
             continue
 
         # Initialize translator with rate limiting
@@ -235,7 +321,8 @@ def translate_lyrics(directory):
                         "interlude", "pre-chorus", "intro", "hook"}
 
         fixed = []
-        for line in lyrics.split("\n"):
+        original_lines = lyrics.split("\n")
+        for line in original_lines:
             line = line.strip()
             if not line:
                 fixed.append("")  # Preserve empty lines
@@ -274,15 +361,19 @@ def translate_lyrics(directory):
         fixed_lyrics = "\n".join(fixed)
         print("Fixed lyrics:\n", fixed_lyrics)
 
-        if input("Edit new lyrics? (y/n): ").lower() == "y":
+        if ask("Edit new lyrics? (y/n): ").lower() == "y":
             print("Lines:", len(fixed))
             while True:
-                line = input("Line to be edited or 'q' to quit: ")
+                line = ask("Line to be edited or 'q' to quit: ", default="q")
                 
                 if line == "q":
                     break
-                
-                line_index = int(line) - 1
+
+                try:
+                    line_index = int(line) - 1
+                except ValueError:
+                    print("Invalid line number.")
+                    continue
                 if line_index < 0 or line_index >= len(fixed):
                     print("Invalid line number.")
                     continue
@@ -290,7 +381,7 @@ def translate_lyrics(directory):
                 old_line = fixed[line_index]
                 print(f"Current line: {old_line}")
 
-                new_line = input("New line: ")
+                new_line = ask("New line: ", default=old_line)
                 if new_line and new_line != old_line:
                     print(format_change(old_line, new_line,
                                         old_label="Was", new_label="Now", indent="  "))
@@ -298,10 +389,26 @@ def translate_lyrics(directory):
                         print(auto_applied_note("edit"))
                 fixed[line_index] = new_line
 
-        if input("Apply new lyrics? (y/n): ").lower() == "y":
+        # Safety net: a translation pass should only ever ADD lines (the
+        # original line is always kept, translations are appended after
+        # it), so the result can never legitimately be shorter than what
+        # you started with. If it somehow is, refuse to save rather than
+        # risk quietly replacing real lyrics with less than you had -
+        # this is exactly the kind of silent data loss that's impossible
+        # to notice until you go looking for it much later.
+        if len(fixed) < len(original_lines) or len(fixed_lyrics.strip()) < len(lyrics.strip()):
+            print("  [SAFETY] The translated version has less content than the "
+                  "original lyrics - refusing to save so nothing gets lost. "
+                  "Please check this file manually.")
+            continue
+
+        if ask("Apply new lyrics? (y/n): ").lower() == "y":
             try:
-                audio = FLAC(file_path)
-                audio["lyrics"] = fixed_lyrics
+                audio = FLAC(file_path)  # re-read: state above may be stale
+                audio["lyrics"] = [fixed_lyrics]
+                audio[TRANSLATED_TAG] = ["1"]
+                if SKIP_HASH_TAG in audio:
+                    del audio[SKIP_HASH_TAG]
                 audio.save()
                 print("New lyrics applied successfully.")
             except mutagen.MutagenError as e:
