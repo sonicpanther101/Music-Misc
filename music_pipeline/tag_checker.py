@@ -153,4 +153,4 @@ def main(path=None):
         extract_and_display_images(audio)
 
 if __name__ == "__main__":
-    main("D:/Music/My Playlist")
+    main("/home/adam/driveBig/Music/My Playlist")

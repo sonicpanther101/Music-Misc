@@ -20,7 +20,7 @@ def get_flacs(directory):
 def sanitize_filename(filename):
     """Remove or replace characters that are invalid in Windows filenames."""
     replacements = {
-        ':': ' -', '/': '-', '\\': '-', '|': '-', '?': '',
+        ':': '-', '/': '-', '\\': '-', '|': '-', '?': '',
         '*': '', '"': "'", '<': '', '>': ''
     }
     for old, new in replacements.items():
@@ -113,15 +113,18 @@ def fix_tags(directory, store=None):
                     audio_file["date"] = [new_date]
                     updated = True
 
-        # Clean up artist formatting
+       # Clean up artist formatting
         artist = audio_file["artist"][0]
+        # Matches commas, ampersands, or feature tags (with surrounding whitespace)
         formatted_artist = re.sub(
             r"\s*(?:,|&|\b(?:feat\.?|ft\.?|featuring)\b)\s*",
             "; ",
             artist,
             flags=re.IGNORECASE
         )
-        formatted_artist = re.sub(r"(; )+", "; ", formatted_artist).strip("; ").strip()
+        # Collapse multi-semicolons and strip dangling punctuation
+        formatted_artist = re.sub(r"\s*;\s*", "; ", formatted_artist)
+        formatted_artist = re.sub(r"(;\s*)+", "; ", formatted_artist).strip("; ").strip() 
         
         if formatted_artist != artist:
             # Check if we've already asked about this specific formatting change
