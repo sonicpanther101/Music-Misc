@@ -5,6 +5,8 @@ from mutagen import File
 from mutagen.flac import FLAC
 from colorama import Fore, Style, init
 
+from change_display import auto_applied_note, format_change, is_case_only
+
 # Initialize colorama for cross-platform terminal colors
 init(autoreset=True)
 
@@ -81,11 +83,11 @@ def replacements(string):
         "h***a": "hella",
         "s***t": "shit",
         "f*ck": "fuck",
-        "f- up": "fucked up",
         "f***": "fuck",
         "f**k": "fuck",
         "F**k": "Fuck",
         "F**K": "FUCK",
+        # "****": "shit",
         "s**t": "shit",
         "sh*t": "shit",
         "Sh*t": "Shit",
@@ -141,6 +143,11 @@ def save_with_retry(audio, path, max_retries=3, retry_delay=2):
             return False
     return False
 
+def _fmt_change(old, new, old_label="Original", new_label="Fixed"):
+    """Highlighted before/after for a single lyric line."""
+    return format_change(old, new, old_label=old_label, new_label=new_label, indent="")
+
+
 def process_auto_replacement(song):
     """Process a song with interactive approval for known patterns"""
     print(f"\n{Fore.CYAN}===== Automatic Replacement: {song['title']} =====")
@@ -169,9 +176,13 @@ def process_auto_replacement(song):
     # Process each change with approval
     for change in changed_lines:
         print(f"\n{Fore.WHITE}----- Line {change['index']+1} -----")
-        print(f"{Fore.RED}Original: {change['original']}")
-        print(f"{Fore.GREEN}Fixed   : {change['fixed']}")
-        
+        print(_fmt_change(change['original'], change['fixed']))
+
+        if is_case_only(change['original'], change['fixed']):
+            print(auto_applied_note("change", indent=""))
+            change['approved'] = True
+            continue
+
         while True:
             response = input(f"Apply this change? ({Fore.GREEN}y{Style.RESET_ALL}/{Fore.RED}n{Style.RESET_ALL}): ").strip().lower()
             if response in ['y', 'n']:
@@ -247,11 +258,14 @@ def process_manual_replacement(song):
                 
                 # Show preview
                 print(f"\n{Fore.WHITE}Preview:")
-                print(f"{Fore.RED}Original: {line}")
-                print(f"{Fore.GREEN}Replaced: {replacement}")
-                
-                # Get confirmation
-                confirm = input(f"Confirm replacement? ({Fore.GREEN}y{Style.RESET_ALL}/{Fore.RED}n{Style.RESET_ALL}): ").strip().lower()
+                print(_fmt_change(line, replacement, new_label="Replaced"))
+
+                # Get confirmation (capitalisation-only edits don't need one)
+                if is_case_only(line, replacement):
+                    print(auto_applied_note("replacement", indent=""))
+                    confirm = 'y'
+                else:
+                    confirm = input(f"Confirm replacement? ({Fore.GREEN}y{Style.RESET_ALL}/{Fore.RED}n{Style.RESET_ALL}): ").strip().lower()
                 if confirm == 'y':
                     # Apply replacement
                     lines[i] = replacement

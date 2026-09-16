@@ -13,6 +13,11 @@ import mutagen
 from mutagen.flac import FLAC
 from tqdm import tqdm
 
+from change_display import (
+    all_case_only, auto_applied_note, format_change, highlight_pair,
+    is_case_only, pick_case_variant,
+)
+
 def get_flac_files(folder_path):
     """Get all FLAC files in the specified folder."""
     print("\nScanning for FLAC files...")
@@ -170,9 +175,19 @@ def choose_standard_value(group_num, total_groups, tag, variations):
     print('='*60)
     
     variants = list(variations.keys())
+
+    # Highlight every variant against the most common spelling, so the
+    # difference between near-identical options is visible rather than
+    # something you have to spot by eye.
+    reference = max(variants, key=lambda v: len(variations[v]))
     for i, variant in enumerate(variants, 1):
         count = len(variations[variant])
-        print(f"{i}. '{variant}' ({count} file(s))")
+        if variant == reference:
+            shown = f"'{variant}'  (most common)"
+        else:
+            _, shown_variant = highlight_pair(reference, variant)
+            shown = f"'{shown_variant}'"
+        print(f"{i}. {shown} ({count} file(s))")
         # Show a few example files
         for f in variations[variant][:2]:
             print(f"   └─ {f}")
@@ -207,9 +222,20 @@ def apply_changes(folder_path, tag, standard_value, variations):
         print(f"  - {f}")
     if len(files_to_update) > 5:
         print(f"  ... and {len(files_to_update)-5} more")
-    
-    confirm = input(f"\nChange '{tag}' to '{standard_value}' in these files? (y/n): ").strip().lower()
-    
+
+    print(f"\n[{tag.upper()}] changes:")
+    others = [v for v in variations if v != standard_value]
+    for other in others:
+        print(format_change(other, standard_value, old_label="From", new_label="To  "))
+
+    # If every value being replaced differs from the standard only by
+    # capitalisation, there is nothing to decide - just do it.
+    if others and all(is_case_only(other, standard_value) for other in others):
+        print(auto_applied_note("change"))
+        confirm = 'y'
+    else:
+        confirm = input("\nApply these changes? (y/n): ").strip().lower()
+
     if confirm == 'y':
         updated = 0
         print()
@@ -271,8 +297,21 @@ def normalise(path = None):
     for i, group in enumerate(inconsistency_groups, 1):
         tag = group['tag']
         variations = group['variations']
-        
-        standard = choose_standard_value(i, len(inconsistency_groups), tag, variations)
+
+        if all_case_only(variations.keys()):
+            # Every "variant" here is the same text with different
+            # capitalisation. Pick the best-looking spelling ourselves
+            # rather than making this a question.
+            counts = {v: len(files) for v, files in variations.items()}
+            standard = pick_case_variant(counts)
+            print(f"\n{'='*60}")
+            print(f"Group {i}/{len(inconsistency_groups)} - [{tag.upper()}]: "
+                  f"capitalisation only, deciding automatically")
+            print('='*60)
+            print(f"Standardising on '{standard}' ({counts[standard]} file(s) already use it).")
+        else:
+            standard = choose_standard_value(i, len(inconsistency_groups), tag, variations)
+
         if standard:
             apply_changes(folder_path, tag, standard, variations)
     

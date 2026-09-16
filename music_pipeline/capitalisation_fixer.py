@@ -22,9 +22,13 @@ WHEN YOU GET ASKED, AND WHEN YOU DON'T:
       every other track that shares the same artist/album/title, so
       fixing an album's name applies it to the whole album in one prompt,
       not once per track.
-    - Ambiguous cases (multiple distinct Last.fm entries matching
-      case-insensitively) always prompt you to pick, same as before --
-      picking one there already counts as approval.
+    - When several Last.fm entries match case-insensitively, those
+      entries differ from each other by capitalisation and nothing else,
+      so that is decided automatically too: the most-listened spelling
+      wins, and the change is printed rather than asked about.
+    - You are still prompted when Last.fm found NOTHING for a tag, since
+      that needs a manual spelling or a URL from you -- that's not a
+      capitalisation question.
     - At any prompt: [a]ll applies every remaining change (of any kind)
       without asking again; [skip-all] rejects everything remaining;
       [q]uit stops the run cleanly, keeping whatever's already been
@@ -551,8 +555,12 @@ def prompt_for_url_correction(entity_type: str):
 # Approval prompts
 # --------------------------------------------------------------------------
 
-def is_case_only(old: str, new: str) -> bool:
-    return old != new and old.lower() == new.lower()
+# is_case_only / format_change / format_inline live in change_display.py so
+# that every stage in the pipeline agrees on what "only capitalisation
+# changed" means and shows the difference the same way.
+from change_display import (  # noqa: E402
+    all_case_only, auto_applied_note, format_change, format_inline, is_case_only,
+)
 
 
 def get_batch_approval(review_state: dict, message: str) -> str:
@@ -665,8 +673,10 @@ def resolve(entity_type: str, key, original: str, cache: dict, fetch_fn, interac
       - Cache hit: return immediately, no network/prompt.
       - Exactly one automatic match: apply silently if case-only-different
         (or identical); otherwise ask for approval ONCE (result cached).
-      - Ambiguous / no match: prompt to disambiguate / manual / URL / skip
-        (the user's choice there already counts as approval).
+      - Several matches: they all differ only by capitalisation (they were
+        filtered to case-insensitive matches of `original`), so the
+        most-listened one is applied silently.
+      - No match at all: prompt for manual spelling / URL / skip.
     Raises QuitRequested if the user quits at any prompt.
     """
     if key in cache:
@@ -683,7 +693,9 @@ def resolve(entity_type: str, key, original: str, cache: dict, fetch_fn, interac
             return candidate
 
         count_str = f" (used by {usage_count} track{'s' if usage_count != 1 else ''})" if usage_count > 1 else ""
-        msg = f"    Last.fm {entity_type} correction: {original!r} -> {candidate!r}{count_str}"
+        msg = (f"    Last.fm {entity_type} correction{count_str}:\n"
+               + format_change(original, candidate, old_label="Current",
+                               new_label="Last.fm", indent="      "))
         decision = get_batch_approval(review_state, msg)
         chosen = candidate if decision == "apply" else None
         cache[key] = chosen
@@ -691,9 +703,20 @@ def resolve(entity_type: str, key, original: str, cache: dict, fetch_fn, interac
             skipped_log.append((entity_type, original, "user declined automatic correction"))
         return chosen
 
-    if len(entries) > 1 and not interactive:
+    if len(entries) > 1:
+        # Every entry here already matched `original` case-insensitively,
+        # so these options differ from each other by capitalisation and
+        # nothing else. That is not a question worth asking: take the one
+        # with the most listeners, which is Last.fm's own consensus
+        # spelling.
         chosen = entries[0][0]
         cache[key] = chosen
+        if interactive and chosen != original:
+            tqdm.write(f"    Last.fm {entity_type} capitalisation "
+                       f"({len(entries)} variants, picking most-listened):")
+            tqdm.write(format_change(original, chosen, old_label="Current",
+                                     new_label="Using", indent="      "))
+            tqdm.write(auto_applied_note("change", indent="      "))
         skipped_log.append((entity_type, original, f"auto-picked highest-listener entry: {chosen!r}"))
         return chosen
 
@@ -776,7 +799,7 @@ def show_diff(t: TrackInfo, updates: dict):
     tqdm.write(f"\n{t.path.name}")
     for field_name, new_value in updates.items():
         old_value = t.trackno_raw if field_name == "tracknumber" else getattr(t, field_name)
-        tqdm.write(f"    {field_name}: {old_value!r} -> {new_value!r}")
+        tqdm.write(f"    {field_name}: {format_inline(old_value, new_value)}")
 
 
 # --------------------------------------------------------------------------
@@ -981,7 +1004,9 @@ def main():
                             track_cache[tkey] = tl_match
                             corrected_title = tl_match
                         else:
-                            msg = f"    Last.fm title correction: {t.title!r} -> {tl_match!r}"
+                            msg = ("    Last.fm title correction:\n"
+                                   + format_change(t.title, tl_match, old_label="Current",
+                                                   new_label="Last.fm", indent="      "))
                             decision = get_batch_approval(review_state, msg)
                             corrected_title = tl_match if decision == "apply" else None
                             track_cache[tkey] = corrected_title
@@ -1017,7 +1042,10 @@ def main():
                             label = t.album or t.title or t.path.name
                             who = f" by {album_context_artist}" if album_context_artist else ""
                             msg = (f"    Track numbers for '{label}'{who} will be reformatted "
-                                   f"(e.g. {(t.trackno_raw or str(n))!r} -> {new_trackno!r}) for {count} track(s).")
+                                   f"for {count} track(s), e.g.\n"
+                                   + format_change(t.trackno_raw or str(n), new_trackno,
+                                                   old_label="Current", new_label="New   ",
+                                                   indent="      "))
                             decision = get_batch_approval(review_state, msg)
                             tracknumber_decisions[decision_key] = decision
                         if decision == "apply":

@@ -1,0 +1,36 @@
+# Core pipeline (needed for a basic run: convert, tag, move)
+mutagen
+colorama
+tqdm
+
+# Lyrics fetching (LRCLIB + NetEase) - needs ffmpeg on PATH too, for ReplayGain
+requests
+
+# Optional TUI front end (tui.py)
+# 0.47+ for the read-only TextArea used by the selectable log view;
+# 3.0+ additionally allows plain mouse-drag selection anywhere in the app.
+textual>=0.47
+# (rich ships with textual - tui.py uses rich.text.Text to render the
+#  pipeline's colour highlighting instead of printing raw escape codes)
+
+# Lyric translation stage (optional)
+deep-translator
+langdetect
+
+# Tag normalisation stage has no extra deps beyond the above.
+
+# Image fetching/fixing stage (optional but on by default)
+Pillow
+beautifulsoup4
+curl_cffi
+matplotlib
+
+# Genre tagging / capitalisation-fix stages (optional, Last.fm)
+cryptography
+
+# MusicBrainz ID stage (optional) - same `requests` already listed above
+
+# Lossless/transcode checker (optional, standalone tool)
+numpy
+scipy
+soundfile

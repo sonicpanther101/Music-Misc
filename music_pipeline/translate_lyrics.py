@@ -9,6 +9,8 @@ from langdetect import detect, LangDetectException
 from langdetect.detector_factory import DetectorFactory
 import unicodedata
 
+from change_display import auto_applied_note, format_change, is_case_only
+
 # Set seed once at module level for deterministic results
 DetectorFactory.seed = 0
 
@@ -285,9 +287,15 @@ def translate_lyrics(directory):
                     print("Invalid line number.")
                     continue
 
-                print(f"Current line: {fixed[line_index]}")
-                
+                old_line = fixed[line_index]
+                print(f"Current line: {old_line}")
+
                 new_line = input("New line: ")
+                if new_line and new_line != old_line:
+                    print(format_change(old_line, new_line,
+                                        old_label="Was", new_label="Now", indent="  "))
+                    if is_case_only(old_line, new_line):
+                        print(auto_applied_note("edit"))
                 fixed[line_index] = new_line
 
         if input("Apply new lyrics? (y/n): ").lower() == "y":

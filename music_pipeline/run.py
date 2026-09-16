@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
 """
 run.py - one script to take new downloads from your downloads folder all the
-way to a fully tagged, imaged, and correctly named FLAC in your music folder.
+way to a fully tagged, imaged, ReplayGained, lyriced FLAC in your music
+folder - no Foobar/TagScanner/etc. hand-off required.
 
 Usage:
     python3 run.py            # uses saved settings, asks only what's new
     python3 run.py --setup    # re-run the full Q&A and overwrite saved settings
-    python3 run.py --auto     # skip optional stages that weren't already
-                               # answered "yes" in a previous --setup, no
-                               # re-prompting for toggles (still asks per-file
-                               # questions inside stages like fix_tags)
+    python3 run.py --auto     # never prompt for setup even if the config is
+                               # missing/incomplete - just use defaults for
+                               # anything unset (handy for cron/TUI use)
 
 Settings (folders, toggles, your contact email, quality level, etc.) are
 saved to ~/.music_pipeline/config.json after the first run, so normally you
 just run `python3 run.py` and only get asked the handful of per-song
 questions that actually need a human (missing tags, which cover image to
-use, etc.) instead of babysitting five separate scripts.
+use, "is this really a low-lyrics song?", etc.) instead of babysitting a
+pile of separate scripts and other apps.
+
+Two folders are all that's required:
+  - download_dir: where new songs land (e.g. your Soulseek "complete" folder)
+  - music_dir:    your actual music library
+
+By default everything happens directly in music_dir (source and
+destination are the same folder for the tagging/fixing/ReplayGain/lyrics
+stages - that's supported end to end, not just tolerated). If you'd rather
+review new songs in a separate holding folder before they mix in with your
+library, turn on "use a staging folder" during setup and a third folder is
+used for the fix-up steps, with a final move into music_dir at the end.
 
 Keep this file in the same folder as the other pipeline scripts - it
 imports them directly.
@@ -34,22 +46,25 @@ CONFIG_PATH = Path.home() / ".music_pipeline" / "config.json"
 
 DEFAULT_CONFIG = {
     "download_dir": "",
-    "unformatted_dir": "",
-    "playlist_dir": "",
+    "music_dir": "",
+    "use_staging_dir": False,
+    "staging_dir": "",
     "contact_email": "",
     "flac_quality": 8,
     "remove_original_after_convert": False,
     "downsize_in_place": True,
     "toggles": {
-        "translate_lyrics": False,
+        "fetch_replaygain": True,
+        "fetch_lyrics": True,
+        "review_lyrics_gaps": True,
         "remove_asterisks": True,
+        "translate_lyrics": False,
         "normalise_tags": True,
         "genre_tags": False,
         "fix_capitalisation": False,
         "musicbrainz_ids": False,
         "downsize": True,
         "lossless_check": False,
-        "wait_for_foobar_replaygain": True,
     },
 }
 
@@ -82,11 +97,31 @@ def ask_path(prompt, current=""):
         return str(Path(path).expanduser())
 
 
+def _migrate(saved):
+    """Bring an old-style config (download_dir/unformatted_dir/playlist_dir,
+    wait_for_foobar_replaygain) forward to the current two-folder shape,
+    so nobody's saved settings get silently dropped by this change."""
+    saved = dict(saved)
+    if "music_dir" not in saved and "playlist_dir" in saved:
+        saved["music_dir"] = saved.pop("playlist_dir")
+    if "unformatted_dir" in saved:
+        unformatted = saved.pop("unformatted_dir")
+        music_dir = saved.get("music_dir", "")
+        if unformatted and unformatted != music_dir:
+            saved["use_staging_dir"] = True
+            saved["staging_dir"] = unformatted
+    toggles = saved.get("toggles", {})
+    toggles.pop("wait_for_foobar_replaygain", None)
+    saved["toggles"] = toggles
+    return saved
+
+
 def load_config():
     if CONFIG_PATH.exists():
         try:
             with open(CONFIG_PATH) as f:
                 saved = json.load(f)
+            saved = _migrate(saved)
             cfg = json.loads(json.dumps(DEFAULT_CONFIG))  # deep copy
             cfg.update({k: v for k, v in saved.items() if k != "toggles"})
             cfg["toggles"].update(saved.get("toggles", {}))
@@ -112,20 +147,40 @@ def run_setup(cfg):
     cfg["download_dir"] = ask_path(
         "Downloads folder (e.g. Soulseek 'complete' folder)", cfg["download_dir"]
     )
-    cfg["unformatted_dir"] = ask_path(
-        "Staging folder for newly-tagged songs (your 'New unformatted songs')",
-        cfg["unformatted_dir"],
-    )
-    cfg["playlist_dir"] = ask_path(
-        "Final music folder (your 'My Playlist' / music library)",
-        cfg["playlist_dir"],
+    cfg["music_dir"] = ask_path(
+        "Music library folder (where finished songs live)", cfg["music_dir"]
     )
 
+    cfg["use_staging_dir"] = ask_yes_no(
+        "\nUse a separate staging folder to look new songs over before "
+        "they land in your music folder? (No = tag/fix/ReplayGain/lyrics "
+        "everything directly in your music folder, source and destination "
+        "the same)",
+        cfg["use_staging_dir"],
+    )
+    if cfg["use_staging_dir"]:
+        cfg["staging_dir"] = ask_path(
+            "Staging folder", cfg["staging_dir"] or cfg["music_dir"]
+        )
+    else:
+        cfg["staging_dir"] = ""
+
     t = cfg["toggles"]
-    t["wait_for_foobar_replaygain"] = ask_yes_no(
-        "\nDo you set lyrics/ReplayGain in Foobar2000 (or similar) between "
-        "tagging and the final move?",
-        t["wait_for_foobar_replaygain"],
+    t["fetch_replaygain"] = ask_yes_no(
+        "\nAutomatically scan + tag ReplayGain (track and album gain, "
+        "matches foobar2000's 'scan as albums (by tags)')?",
+        t["fetch_replaygain"],
+    )
+    t["fetch_lyrics"] = ask_yes_no(
+        "Automatically fetch time-synced lyrics (LRCLIB, then NetEase) and "
+        "mark instrumentals?",
+        t["fetch_lyrics"],
+    )
+    t["review_lyrics_gaps"] = ask_yes_no(
+        "After fetching, walk through tracks that still need a manual "
+        "lyric sync (and add genuinely low-lyric songs to the exceptions "
+        "list)?",
+        t["review_lyrics_gaps"],
     )
     t["remove_asterisks"] = ask_yes_no(
         "Scan lyrics for censored (****) words and offer to fix them?",
@@ -280,7 +335,7 @@ def downsize_flacs(folder, in_place):
 
 def main():
     auto = "--auto" in sys.argv
-    setup = "--setup" in sys.argv or not CONFIG_PATH.exists()
+    setup = ("--setup" in sys.argv) or (not CONFIG_PATH.exists() and not auto)
 
     cfg = load_config()
     if setup:
@@ -289,66 +344,84 @@ def main():
         print(f"Using saved settings from {CONFIG_PATH} (run with --setup to change them).")
 
     download_dir = cfg["download_dir"]
-    unformatted_dir = cfg["unformatted_dir"]
-    playlist_dir = cfg["playlist_dir"]
+    music_dir = cfg["music_dir"]
+    if not download_dir or not music_dir:
+        print("download_dir and music_dir must be set - run with --setup first.")
+        sys.exit(1)
+
+    # work_dir is where gathering/converting/tagging/ReplayGain/lyrics all
+    # happen. With no staging folder configured this IS music_dir, so every
+    # one of those stages runs with source == destination on purpose.
+    work_dir = cfg["staging_dir"] if (cfg["use_staging_dir"] and cfg["staging_dir"]) else music_dir
     t = cfg["toggles"]
 
-    for d in (unformatted_dir, playlist_dir):
+    for d in (work_dir, music_dir):
         os.makedirs(d, exist_ok=True)
 
-    # ---------------- Stage 1: downloads -> staged & tagged FLACs -------
-    stage("1/4  Gathering new downloads into the staging folder")
+    # ---------------- Stage 1: downloads -> tagged, ReplayGained, lyriced FLACs
+    stage("1/4  Gathering new downloads")
     from soulseek_gather_downloads import move_files_to_root
-    safe_call(move_files_to_root, download_dir, unformatted_dir)
+    safe_call(move_files_to_root, download_dir, work_dir)
 
     stage("2/4  Converting anything that isn't FLAC yet")
-    safe_call(convert_downloads_to_flac, unformatted_dir,
+    safe_call(convert_downloads_to_flac, work_dir,
                cfg["flac_quality"], cfg["remove_original_after_convert"])
 
     stage("3/4  Fixing/filling tags and filenames")
     from fix_tags import fix_tags
-    safe_call(fix_tags, unformatted_dir)
+    safe_call(fix_tags, work_dir)
 
-    if t["wait_for_foobar_replaygain"]:
-        input(
-            "\nNow set lyrics + ReplayGain (scan as album) in Foobar2000 "
-            "or your tool of choice for the files in:\n  "
-            f"{unformatted_dir}\nPress Enter here once that's done..."
-        )
+    if t["fetch_replaygain"]:
+        stage("Scanning ReplayGain (track + album, foobar 'scan as albums by tags')")
+        fn = try_import("replaygain", "apply_replaygain", "mutagen")
+        if fn:
+            safe_call(fn, work_dir)
+
+    if t["fetch_lyrics"]:
+        stage("Fetching time-synced lyrics (LRCLIB, then NetEase)")
+        fn = try_import("lyrics_fetcher", "process_folder", "requests")
+        if fn:
+            safe_call(fn, work_dir)
 
     if t["remove_asterisks"]:
         stage("Cleaning censored words out of lyrics")
         fn = try_import("remove_asterixs_from_lyrics", "remove_asterixs_from_lyrics", "colorama")
         if fn:
-            safe_call(fn, unformatted_dir)
+            safe_call(fn, work_dir)
 
     if t["translate_lyrics"]:
         stage("Translating non-English lyrics")
         fn = try_import("translate_lyrics", "translate_lyrics", "deep-translator langdetect")
         if fn:
-            safe_call(fn, unformatted_dir)
+            safe_call(fn, work_dir)
+
+    if t["review_lyrics_gaps"]:
+        stage("Reviewing tracks that still need a manual lyric sync")
+        fn = try_import("lyrics_checker", "interactive_review", "mutagen")
+        if fn:
+            safe_call(fn, work_dir)
 
     stage("4/4  Final review and move into your music folder")
     from final_check import confirm_and_move
-    safe_call(confirm_and_move, unformatted_dir, playlist_dir)
+    safe_call(confirm_and_move, work_dir, music_dir)
 
     # ---------------- Stage 2: library-wide polish -----------------------
     if t["normalise_tags"]:
         stage("Normalising inconsistent tags across the library")
         from tag_normaliser import normalise
-        safe_call(normalise, playlist_dir)
+        safe_call(normalise, music_dir)
 
     if t["genre_tags"]:
         stage("Fetching genre tags from Last.fm")
         key_file = ensure_lastfm_key()
         subprocess.run([sys.executable, str(SCRIPT_DIR / "genre_tagger.py"),
-                         playlist_dir, "--key-file", key_file], check=False)
+                         music_dir, "--key-file", key_file], check=False)
 
     if t["fix_capitalisation"]:
         stage("Fixing capitalisation against Last.fm")
         key_file = ensure_lastfm_key()
         subprocess.run([sys.executable, str(SCRIPT_DIR / "capitalisation_fixer.py"),
-                         playlist_dir, "--key-file", key_file], check=False)
+                         music_dir, "--key-file", key_file], check=False)
 
     if t["musicbrainz_ids"]:
         stage("Resolving MusicBrainz artist IDs")
@@ -358,25 +431,25 @@ def main():
         cfg["contact_email"] = contact
         save_config(cfg)
         subprocess.run([sys.executable, str(SCRIPT_DIR / "musicbrainz_id_finder.py"),
-                         playlist_dir, "--contact", contact], check=False)
+                         music_dir, "--contact", contact], check=False)
 
     stage("Setting cover + artist images (front cover & artist photo only)")
     fn = try_import("image_fixer", "process_library", "Pillow beautifulsoup4 curl_cffi matplotlib")
     if fn:
-        safe_call(fn, playlist_dir)
+        safe_call(fn, music_dir)
 
     if t["downsize"]:
         stage("Downsizing any FLACs above 16-bit/44.1kHz")
-        safe_call(downsize_flacs, playlist_dir, cfg["downsize_in_place"])
+        safe_call(downsize_flacs, music_dir, cfg["downsize_in_place"])
 
     if t["lossless_check"]:
         stage("Scanning for likely transcodes (fake lossless)")
         subprocess.run([sys.executable, str(SCRIPT_DIR / "lossless_checker.py"),
-                         playlist_dir, "--recursive"], check=False)
+                         music_dir, "--recursive"], check=False)
 
     print("\n" + "=" * 70)
-    print("All done! New songs are formatted, tagged, imaged, and in:")
-    print(f"  {playlist_dir}")
+    print("All done! New songs are formatted, tagged, ReplayGained, lyriced, and in:")
+    print(f"  {music_dir}")
     print("=" * 70)
 
 

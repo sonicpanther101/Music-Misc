@@ -33,6 +33,7 @@ def ask_skip(message):
     return response == "y"
 
 def confirm_and_move(directory, new_directory):
+    same_dir = os.path.abspath(directory) == os.path.abspath(new_directory)
     flacs = get_flacs(directory)
     required_tags = [
         "artist", "title", "album", "date", "lyrics",
@@ -95,25 +96,35 @@ def confirm_and_move(directory, new_directory):
                 continue
 
         # --- Duplicate in destination ---
-        new_path = os.path.join(new_directory, filename)
-        if os.path.exists(new_path):
+        # When source == destination, "the file already exists there" is
+        # trivially true (it's this exact file) and isn't a conflict, so
+        # that check only makes sense when we're actually moving folders.
+        new_path = os.path.join(new_directory, filename) if not same_dir else flac
+        if not same_dir and os.path.exists(new_path):
             msg = f"File {filename} already exists in the new directory."
             if not ask_skip(msg):
                 print("Skipping file.")
                 continue
 
         # --- Final confirmation ---
-        print(f"\n✅ File {filename} is ready to be moved to the new directory.")
+        if same_dir:
+            print(f"\n✅ File {filename} is fully tagged and already in your music folder.")
+        else:
+            print(f"\n✅ File {filename} is ready to be moved to the new directory.")
         for tag in required_tags:
             print(f"{tag}: {audio_file[tag][0]}")
         print(f"Filename: {filename}")
 
-        confirm = input("Move this file? (y/n): ").strip().lower()
+        confirm_prompt = "Mark this file as done? (y/n): " if same_dir else "Move this file? (y/n): "
+        confirm = input(confirm_prompt).strip().lower()
         if confirm != "y":
             print("Skipping file.")
             continue
 
-        # --- Move file ---
+        # --- Move file (skipped entirely when source == destination) ---
+        if same_dir:
+            print(f"{filename} confirmed in place - nothing to move.")
+            continue
         try:
             os.rename(flac, new_path)
             print(f"Moved {filename} successfully.")
